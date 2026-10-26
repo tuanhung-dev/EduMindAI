@@ -1,0 +1,7 @@
+﻿To: vivanmay1982@gmail.com
+Subject: EduMind AI - Xac minh email
+
+Cam on ban da dang ky EduMind AI. Xac minh email tai day:
+http://127.0.0.1:5173/confirm-email?userId=f33e7f8c-f94f-4d96-9e75-8dd0f78bbf6c&code=Q2ZESjhBN3JwUXQ2OWYxRG5wTFg4SWpydWgrM1N3YytnVFQ1T3BRdmJ4RkZReFM1K3pzYUVGV0h2T2NoQ3Nkd3FLanJ1bUtqcDRLQU1uM1FlWXN2RGhrWFV1aHA5cld1WmdORTBlWWZaVWptcVEvdldXaWlBTXBCazJ2QVR6NURUV2tzbVdBU0twV01kQVlXeEViaFVKbHNjNW9HczN6V3BBOEN6N1diYkpFMUVkUmV5WVhnMkdKRnhzWXZaUzFYVVJrVFUwZ0hsV2k1d0xibzllL21BTkdycS9INGsvU2VvQUhGNC8xK0Rxd21PZHBBUWJzRGFyT3B5OThuY2FEemIreklSQT09
+
+Neu ban khong dang ky, hay bo qua email nay.

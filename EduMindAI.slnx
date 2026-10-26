@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/EduMind.Api/EduMind.Api.csproj" />
+  </Folder>
+</Solution>

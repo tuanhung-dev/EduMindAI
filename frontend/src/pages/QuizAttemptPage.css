@@ -1,0 +1,43 @@
+.quiz-flow{color:#27304c;padding-bottom:36px;max-width:980px;margin:0 auto}
+.quiz-flow-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px}
+.quiz-flow-eyebrow{letter-spacing:1.5px;color:#7864d1;font-weight:800;font-size:10px}
+.quiz-flow-head h1{font-size:26px;margin:9px 0 8px}
+.quiz-flow-head p{color:#7a859a;font-size:13px;line-height:1.6;margin:0}
+.quiz-flow-back{color:#6c57c9;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap}
+.quiz-flow-box{border:1px solid #e7e9f4;border-radius:15px;background:#fff;padding:20px 23px;margin-bottom:17px;box-shadow:0 6px 27px rgba(45,45,95,.035);font-size:13px;line-height:1.65}
+.quiz-flow-box a{color:#6a55cc}
+.quiz-flow-alert{padding:14px;border-radius:10px;font-size:13px;margin:0 0 15px}
+.quiz-flow-error{color:#a33046;background:#fff0f2;border:1px solid #ffdae1}
+.quiz-flow-toolbar{display:flex;align-items:center;gap:20px;flex-wrap:wrap;color:#65718b}
+.quiz-flow-toolbar strong{color:#6852c8}
+.quiz-flow-meter{height:7px;min-width:100px;flex:1;background:#efecfa;border-radius:12px;overflow:hidden}
+.quiz-flow-meter>div{height:100%;background:#7965d5;border-radius:12px;transition:width .15s}
+.quiz-flow-question{min-width:0;padding-top:21px}
+.quiz-flow-question legend{float:left;width:100%;box-sizing:border-box;font-size:14px;color:#303751;font-weight:750;line-height:1.6;padding:0 0 16px}
+.quiz-flow-answers{clear:both;display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.quiz-flow-choice{display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px;border:1px solid #e8e8f2;border-radius:10px;font-size:13px;color:#4b5570;overflow-wrap:anywhere}
+.quiz-flow-choice:has(input:focus-visible){outline:2px solid #a99de7;outline-offset:2px}
+.quiz-flow-choice input{margin:0;accent-color:#745ed3}
+.quiz-flow-selected{border-color:#8c7ee1;background:#f7f5ff}
+.quiz-flow-letter{display:grid;place-items:center;flex:none;width:26px;height:26px;background:#f0ecfe;border-radius:7px;color:#6952c7;font-weight:800}
+.quiz-flow-submitbar{display:flex;align-items:center;gap:20px;justify-content:space-between;font-size:11px;line-height:1.6;color:#818da0;padding:10px 0 20px}
+.quiz-flow-primary{border:0;cursor:pointer;display:inline-block;background:#745bd7;padding:13px 20px;border-radius:10px;color:#fff!important;text-decoration:none;font-size:12px;font-weight:800;white-space:nowrap}
+.quiz-flow-primary:disabled{opacity:.6;cursor:not-allowed}
+.quiz-flow-result-head{display:flex;align-items:center;justify-content:space-around;gap:20px;flex-wrap:wrap;text-align:center}
+.quiz-flow-result-head div{display:grid;gap:6px}
+.quiz-flow-result-head span{font-size:10px;font-weight:800;letter-spacing:1px;color:#818ba3}
+.quiz-flow-result-head strong{font-size:28px;color:#6e56d0}
+.quiz-flow-result-head strong.quiz-flow-time{font-size:14px;color:#303955}
+.quiz-flow-subhead{font-size:12px;color:#7a849a;line-height:1.7}
+.quiz-flow-review{border-left:4px solid #cbd0dc}
+.quiz-flow-correct{border-left-color:#2f9d6f}
+.quiz-flow-wrong{border-left-color:#e39b58}
+.quiz-flow-review-head{display:flex;gap:12px;justify-content:space-between;align-items:start}
+.quiz-flow-review-head h3{font-size:14px;margin:0 0 10px}
+.quiz-flow-review-head>span{white-space:nowrap;font-size:11px;font-weight:800;color:#6555ba}
+.quiz-flow-review p{margin:10px 0;color:#4d5873}
+.quiz-flow-explanation{background:#f6f5fc;padding:12px;border-radius:9px;color:#454e68;margin:12px 0}
+.quiz-flow-source{font-size:12px;color:#6e7890;margin-bottom:12px}
+.quiz-flow-link{font-size:12px;text-decoration:none;font-weight:700}
+.quiz-flow-actions{display:flex;justify-content:flex-end}
+@media(max-width:700px){.quiz-flow-head{display:block}.quiz-flow-head h1{font-size:22px}.quiz-flow-back{display:inline-block;margin-top:12px}.quiz-flow-answers{grid-template-columns:1fr}.quiz-flow-submitbar{flex-direction:column;align-items:stretch}.quiz-flow-result-head{justify-content:flex-start;text-align:left}.quiz-flow-box{padding:16px}.quiz-flow-review-head{display:block}}

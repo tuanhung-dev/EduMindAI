@@ -1,0 +1,79 @@
+.tutor-page{color:#222b45;padding-bottom:22px}
+.tutor-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:25px}
+.tutor-eyebrow,.tutor-section-tag{font-size:10px;font-weight:800;letter-spacing:1.5px;color:#7967d8}
+.tutor-intro h1{font-size:27px;line-height:1.25;margin:9px 0 10px;color:#242944}
+.tutor-intro p{font-size:13px;line-height:1.7;color:#7d879e;max-width:690px;margin:0}
+.tutor-demo-tag{background:#efeaff;color:#6d5bd2;padding:9px 13px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.tutor-grid{display:grid;grid-template-columns:minmax(245px,0.85fr) minmax(0,1.65fr);gap:20px;align-items:start}
+.tutor-card{background:white;border:1px solid #e9eaf5;border-radius:18px;box-shadow:0 7px 32px rgba(51,50,94,.035);padding:25px;min-width:0}
+.tutor-card-header h2{font-size:19px;color:#222b45;margin:8px 0 5px}
+.tutor-card-header p{font-size:12px;color:#8590a5;margin:4px 0 0;line-height:1.6}
+.tutor-card-header{margin-bottom:24px}
+.tutor-label{display:block;font-size:12px;font-weight:750;color:#49546d;margin-bottom:9px}
+.tutor-doc-panel select,.tutor-ask-form textarea{box-sizing:border-box;width:100%;border:1px solid #dfe2ed;border-radius:11px;padding:13px 12px;background:#fff;color:#27304c;font:inherit;font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+.tutor-doc-panel select:focus,.tutor-ask-form textarea:focus{border-color:#8573e5;box-shadow:0 0 0 3px rgba(125,102,220,.1)}
+.tutor-document-info{display:flex;align-items:center;gap:10px;background:#f8f8fd;border:1px solid #eeedf8;padding:12px;border-radius:12px;margin:16px 0}
+.tutor-document-info>div{min-width:0;flex:1}
+.tutor-document-info strong{display:block;overflow-wrap:anywhere;font-size:12px;color:#373e5b}
+.tutor-document-info p{margin:5px 0 0;font-size:11px;color:#9aa2b5}
+.tutor-pdf-icon{display:grid;place-items:center;border-radius:9px;width:38px;height:40px;flex-shrink:0;font-size:10px;font-weight:900;background:#ffecec;color:#d75c5c}
+.tutor-status{font-size:10px;border-radius:20px;padding:5px 7px;background:#fff0e6;color:#a56625;flex-shrink:0}
+.tutor-status.is-ready{background:#def7e9;color:#287b56}
+.tutor-outline-btn,.tutor-index-btn{box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:100%;border-radius:10px;padding:12px;font-weight:700;font-size:12px;text-decoration:none;cursor:pointer}
+.tutor-outline-btn{background:white;border:1px solid #d8d2f8;color:#6854ca;margin-bottom:9px}
+.tutor-index-btn{background:#6e59da;border:1px solid #6e59da;color:white}
+.tutor-index-btn:hover{background:#5e49cc}
+.tutor-index-btn:disabled,.tutor-ask-form button:disabled{opacity:.55;cursor:not-allowed}
+.tutor-hint,.tutor-muted{font-size:11px;line-height:1.65;color:#8c96a9}
+.tutor-hint{margin:13px 0 0}
+.tutor-empty{text-align:center;padding:25px 6px}
+.tutor-empty-icon{font-size:45px;color:#9486db}
+.tutor-empty strong{display:block;font-size:14px;margin:8px 0}
+.tutor-empty p{font-size:12px;line-height:1.6;color:#8c96a9}
+.tutor-text-link{font-size:12px;font-weight:700;color:#6955cc}
+.tutor-conversation{min-height:510px;display:flex;flex-direction:column}
+.tutor-welcome{text-align:center;margin:auto 0;padding:25px 8px 30px}
+.tutor-sparkle{display:grid;place-items:center;margin:auto;background:linear-gradient(135deg,#8b7def,#614bca);height:57px;width:57px;border-radius:18px;font-size:29px;color:#fff;box-shadow:0 9px 20px rgba(96,68,200,.17)}
+.tutor-sparkle.is-loading{animation:tutor-pulse 1.2s ease-in-out infinite alternate}
+@keyframes tutor-pulse{to{opacity:.65;transform:scale(.95)}}
+.tutor-welcome h3{font-size:16px;margin:15px 0 8px}
+.tutor-welcome p{font-size:12px;color:#939bae;margin:0 0 19px}
+.tutor-suggestions{display:flex;flex-direction:column;gap:8px;text-align:left;max-width:500px;margin:0 auto}
+.tutor-suggestions button{display:flex;justify-content:space-between;gap:12px;text-align:left;cursor:pointer;background:#faf9ff;border:1px solid #eceafa;border-radius:10px;color:#646f87;font-size:12px;padding:12px 14px}
+.tutor-suggestions button span{color:#816edd}
+.tutor-suggestions button:hover{border-color:#c5bbf4}
+.tutor-ask-form{border-top:1px solid #edf0f8;padding-top:20px;margin-top:auto}
+.tutor-ask-form textarea{resize:vertical;min-height:88px;line-height:1.6}
+.tutor-form-bottom{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:10px}
+.tutor-form-bottom span{font-size:11px;color:#949cae}
+.tutor-form-bottom button{background:#6e59da;color:white;border:0;border-radius:9px;padding:11px 18px;cursor:pointer;font-weight:700;font-size:12px}
+.tutor-result{margin:0 0 20px;flex:1}
+.tutor-result-label{font-size:11px;color:#6c58d1;font-weight:800;letter-spacing:.5px}
+.tutor-answer-text{white-space:pre-wrap;line-height:1.85;color:#38425e;font-size:13px;margin:12px 0 24px}
+.tutor-sources{border-top:1px solid #eceff7;padding-top:15px}
+.tutor-sources h3{font-size:12px;margin:0 0 12px}
+.tutor-sources ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.tutor-sources li{border:1px solid #eceaf8;border-radius:10px;background:#fbfaff;padding:12px}
+.tutor-source-top{display:flex;justify-content:space-between;gap:10px;align-items:center;color:#725ec9;font-weight:750;font-size:11px}
+.tutor-source-top a{color:#725ec9;text-decoration:none;white-space:nowrap}
+.tutor-sources li p{margin:7px 0 0;font-size:11px;color:#79849a;line-height:1.6;overflow-wrap:anywhere}
+.tutor-alert{padding:11px 13px;border-radius:10px;font-size:12px;line-height:1.65;margin:0 0 17px;overflow-wrap:anywhere}
+.tutor-alert.is-error{background:#fff2f2;color:#b13e4d;border:1px solid #ffd4d9}
+.tutor-alert.is-success{background:#edfaf2;color:#26744b;border:1px solid #cdefda}
+.tutor-footnote{font-size:11px;line-height:1.65;color:#939baf;margin:17px 0 0}
+@media(max-width:1060px){.tutor-grid{grid-template-columns:1fr}.tutor-conversation{min-height:490px}}
+@media(max-width:600px){.tutor-intro{display:block}.tutor-demo-tag{display:inline-flex;margin-top:14px}.tutor-intro h1{font-size:23px}.tutor-card{padding:18px}.tutor-form-bottom{align-items:stretch}.tutor-form-bottom button{max-width:60%}}
+
+/* Bước 13: tóm tắt PDF trong giao diện Gia sư AI */
+.tutor-mode-tabs{display:flex;gap:8px;border-bottom:1px solid #ebeaf5;padding-bottom:14px;margin:0 0 18px}
+.tutor-mode-tabs button{border:1px solid #e9e7f4;background:#f7f6fb;padding:10px 15px;border-radius:10px;color:#65708c;font-size:12px;font-weight:750;cursor:pointer}
+.tutor-mode-tabs button.is-active{background:#6e59da;color:#fff;border-color:#6e59da}
+.tutor-mode-tabs button:disabled{cursor:not-allowed;opacity:.6}
+.tutor-summary-area{display:flex;flex-direction:column;gap:12px;min-height:360px}
+.tutor-summary-area select{padding:11px 12px;border:1px solid #dcdff0;border-radius:9px;background:white;color:#38425e;max-width:360px}
+.tutor-summary-btn{border:0;border-radius:9px;background:#6e59da;color:white;padding:12px 17px;cursor:pointer;font-weight:750;align-self:flex-start}
+.tutor-summary-btn:disabled{cursor:not-allowed;opacity:.6}
+.tutor-summary-welcome{margin-top:24px}
+.tutor-alert.is-warning{color:#936b29;background:#fff9ea;border:1px solid #f4e3b4;margin-top:12px}
+.tutor-coverage-info{font-size:12px;color:#68738e;line-height:1.6;margin-top:-8px}
+@media(max-width:600px){.tutor-mode-tabs{flex-wrap:wrap}.tutor-summary-btn{width:100%}}
