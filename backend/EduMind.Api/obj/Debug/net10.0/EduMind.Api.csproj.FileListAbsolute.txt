@@ -145,3 +145,4 @@ C:\Projects\EduMindAI\backend\EduMind.Api\obj\Debug\net10.0\refint\EduMind.Api.d
 C:\Projects\EduMindAI\backend\EduMind.Api\obj\Debug\net10.0\EduMind.Api.pdb
 C:\Projects\EduMindAI\backend\EduMind.Api\obj\Debug\net10.0\EduMind.Api.genruntimeconfig.cache
 C:\Projects\EduMindAI\backend\EduMind.Api\obj\Debug\net10.0\ref\EduMind.Api.dll
+C:\Projects\EduMindAI\backend\EduMind.Api\obj\Debug\net10.0\EduMind.Api.sourcelink.json

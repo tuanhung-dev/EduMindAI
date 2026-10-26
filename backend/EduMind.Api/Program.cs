@@ -73,9 +73,10 @@ builder.Services.AddCors(options => options.AddPolicy("ReactApp", policy => poli
     .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
     .AllowAnyHeader().AllowAnyMethod()));
 
-builder.Services.AddHttpClient("EduMindOpenAI", client =>
+builder.Services.AddHttpClient<AiTextService>(client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(90);
+    // Ollama tren laptop co the can vai phut khi load model lan dau.
+    client.Timeout = TimeSpan.FromMinutes(5);
 });
 
 var app = builder.Build();

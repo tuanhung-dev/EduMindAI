@@ -5,10 +5,7 @@ using EduMind.Api.Data;
 using EduMind.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace EduMind.Api.Controllers;
@@ -25,20 +22,17 @@ public class AskDocumentRequest
 public class AiTutorController : ControllerBase
 {
     private readonly EduMindDbContext _db;
-    private readonly IConfiguration _config;
+    private readonly AiTextService _aiTextService;
     private readonly IWebHostEnvironment _env;
-    private readonly IHttpClientFactory _httpFactory;
 
     public AiTutorController(
         EduMindDbContext db,
-        IConfiguration config,
         IWebHostEnvironment env,
-        IHttpClientFactory httpFactory)
+        AiTextService aiTextService)
     {
         _db = db;
-        _config = config;
         _env = env;
-        _httpFactory = httpFactory;
+        _aiTextService = aiTextService;
     }
 
     [HttpPost("ask")]
@@ -125,28 +119,6 @@ public class AiTutorController : ControllerBase
             .Take(4)
             .ToList();
 
-        // Các câu hỏi tổng quan thường không chứa từ khóa xuất hiện nguyên văn
-        // trong PDF. Thay vì trả lời rỗng, lấy tối đa 4 đoạn trải đều tài liệu.
-        // Đây chỉ là lấy mẫu, KHÔNG phải tìm kiếm ngữ nghĩa/RAG đầy đủ.
-        bool isOverviewQuestion = Regex.IsMatch(
-            question,
-            @"tóm tắt|tổng quan|nội dung chính|chủ đề chính|ý chính|tài liệu (này )?(nói|đề cập)",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (isOverviewQuestion)
-        {
-            var sampleIndices = new[]
-            {
-                0, chunks.Count / 3, (chunks.Count * 2) / 3, chunks.Count - 1
-            }.Distinct();
-            relevant = sampleIndices.Select(i => new
-            {
-                PageNumber = chunks[i].PageNumber,
-                ChunkIndex = chunks[i].ChunkIndex,
-                Content = chunks[i].Content,
-                Score = 0
-            }).ToList();
-        }
-
         if (relevant.Count == 0)
         {
             return Ok(new
@@ -166,21 +138,8 @@ public class AiTutorController : ControllerBase
                 $"[Trang {chunk.PageNumber}]");
             // Giới hạn ngữ cảnh để giảm nguy cơ vượt giới hạn input model.
             var excerpt = chunk.Content?.Trim() ?? "";
-            context.AppendLine(excerpt.Length > 3000 ? excerpt[..3000] : excerpt);
+            context.AppendLine(excerpt.Length > 1400 ? excerpt[..1400] : excerpt);
             context.AppendLine();
-        }
-
-        // Lay API key da luu trong User Secrets
-        string? apiKey = _config["OpenAI:ApiKey"]?.Trim();
-        string model = _config["OpenAI:Model"]?.Trim() is { Length: > 0 } configuredModel
-            ? configuredModel : "gpt-4.1-mini";
-
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            return StatusCode(503, new
-            {
-                message = "Chua cau hinh OpenAI API Key."
-            });
         }
 
         // Chi dan cho mo hinh
@@ -203,97 +162,20 @@ public class AiTutorController : ControllerBase
             CÂU HỎI:
             {question}
 
-            {(isOverviewQuestion ? "LƯU Ý: Bốn đoạn dưới đây chỉ là mẫu trải đều tài liệu. Không khẳng định đã đọc toàn bộ PDF." : "")}
             NỘI DUNG TÀI LIỆU:
             {context}
             """;
 
-        // Gui yeu cau den OpenAI Responses API
-        var client = _httpFactory.CreateClient(
-            "EduMindOpenAI");
-
-        using var apiRequest = new HttpRequestMessage(
-            HttpMethod.Post,
-            "https://api.openai.com/v1/responses");
-
-        apiRequest.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", apiKey);
-        apiRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        apiRequest.Content = JsonContent.Create(new
-        {
-            model,
-            instructions,
-            input,
-            store = false,
-            max_output_tokens = 600
-        });
-
         try
         {
-            using var response = await client.SendAsync(
-                apiRequest,
-                cancellationToken);
-
-            
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                return StatusCode(502, OpenAiResponseInspector.PublicError(
-                    response, errorBody, "OpenAI từ chối yêu cầu hỏi đáp."));
-            }
-
-            string json = await response.Content
-                .ReadAsStringAsync(cancellationToken);
-
-            using var result = JsonDocument.Parse(json);
-
-            var answerBuilder = new StringBuilder();
-
-            if (result.RootElement.TryGetProperty(
-                    "output", out var output) &&
-                output.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in output.EnumerateArray())
-                {
-                    if (!item.TryGetProperty(
-                            "content", out var content) ||
-                        content.ValueKind != JsonValueKind.Array)
-                        continue;
-
-                    foreach (var part in content.EnumerateArray())
-                    {
-                        if (part.TryGetProperty(
-                                "type", out var type) &&
-                            type.GetString() == "output_text" &&
-                            part.TryGetProperty(
-                                "text", out var text))
-                        {
-                            answerBuilder.AppendLine(
-                                text.GetString());
-                        }
-                    }
-                }
-            }
-
-            string answer = answerBuilder.ToString().Trim();
-
-            if (string.IsNullOrWhiteSpace(answer))
-            {
-                return StatusCode(502, new
-                {
-                    message = "AI khong tra ve van ban."
-                });
-            }
+            var answer = await _aiTextService.GenerateAsync(
+                instructions, input, 600, cancellationToken);
 
             return Ok(new
             {
                 documentId = request.DocumentId,
                 question,
                 answer,
-                sampledOverview = isOverviewQuestion,
-
-                // Cac doan duoc dung lam ngu canh
                 sources = relevant.Select(c => new
                 {
                     c.PageNumber,
@@ -304,27 +186,9 @@ public class AiTutorController : ControllerBase
                 })
             });
         }
-        catch (HttpRequestException)
+        catch (AiGenerationException ex)
         {
-            return StatusCode(502, new
-            {
-                message = "Khong ket noi duoc OpenAI."
-            });
-        }
-        catch (TaskCanceledException)
-            when (!cancellationToken.IsCancellationRequested)
-        {
-            return StatusCode(504, new
-            {
-                message = "OpenAI phan hoi qua cham."
-            });
-        }
-        catch (JsonException)
-        {
-            return StatusCode(502, new
-            {
-                message = "Phan hoi OpenAI khong hop le."
-            });
+            return StatusCode(ex.StatusCode, new { message = ex.Message });
         }
     }
 }

@@ -5,8 +5,6 @@ using EduMind.Api.Services;
 using EduMind.Api.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
@@ -46,22 +44,20 @@ public sealed class QuizzesController : ControllerBase
     private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private bool IsAdmin => User.IsInRole("Admin");
     private const int MaxChunksToRead = 1000;
-    private const int MaxChunksToSend = 16;
-    private const int MaxTextPerChunk = 1150;
-    private const int MaxContextLength = 20000;
+    private const int MaxChunksToSend = 8;
+    private const int MaxTextPerChunk = 850;
+    private const int MaxContextLength = 7400;
 
     private readonly EduMindDbContext _db;
-    private readonly IConfiguration _config;
+    private readonly AiTextService _aiTextService;
     private readonly IWebHostEnvironment _environment;
-    private readonly IHttpClientFactory _httpFactory;
 
-    public QuizzesController(EduMindDbContext db, IConfiguration config,
-        IWebHostEnvironment environment, IHttpClientFactory httpFactory)
+    public QuizzesController(EduMindDbContext db,
+        IWebHostEnvironment environment, AiTextService aiTextService)
     {
         _db = db;
-        _config = config;
         _environment = environment;
-        _httpFactory = httpFactory;
+        _aiTextService = aiTextService;
     }
 
     // Bước 14 chỉ là demo local; cần Identity + phân quyền trước khi deploy công khai.
@@ -159,11 +155,6 @@ public sealed class QuizzesController : ControllerBase
             return UnprocessableEntity(new { message = "Các đoạn PDF đã lưu không có văn bản." });
         bool partial = totalChunks > selected.Count || truncated;
 
-        string? apiKey = _config["OpenAI:ApiKey"]?.Trim();
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return StatusCode(503, new { message = "Thiếu OpenAI API Key trong Backend User Secrets." });
-        string model = _config["OpenAI:Model"]?.Trim() is { Length: > 0 } configuredModel
-            ? configuredModel : "gpt-4.1-mini";
         string level = difficulty switch
         {
             "easy" => "cơ bản: nhận biết, ghi nhớ",
@@ -205,58 +196,18 @@ public sealed class QuizzesController : ControllerBase
             additionalProperties = false
         };
 
-        using var aiRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
-        aiRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        aiRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        aiRequest.Content = JsonContent.Create(new
-        {
-            model, instructions,
-            input = $"TÊN PDF: {document.OriginalFileName}\n{(partial ? "CHÚ Ý: DỮ LIỆU CHỈ LÀ CÁC ĐOẠN TRÍCH CHỌN.\n" : "")}CHUNKS:\n{context}",
-            store = false,
-            max_output_tokens = request.QuestionCount == 5 ? 3000 : 5200,
-            text = new { format = new { type = "json_schema", name = "edumind_quiz", strict = true, schema } }
-        });
-
         string responseText;
         try
         {
-            var client = _httpFactory.CreateClient("EduMindOpenAI");
-            using var response = await client.SendAsync(aiRequest, ct);
-            var body = await response.Content.ReadAsStringAsync(ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                return StatusCode(502, OpenAiResponseInspector.PublicError(
-                    response, body, "Chưa tạo được đề từ AI."));
-            }
-
-            using var parsed = JsonDocument.Parse(body);
-            var output = new StringBuilder();
-            if (parsed.RootElement.TryGetProperty("output", out var items) && items.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in items.EnumerateArray())
-                {
-                    if (!item.TryGetProperty("content", out var parts) || parts.ValueKind != JsonValueKind.Array) continue;
-                    foreach (var part in parts.EnumerateArray())
-                    {
-                        if (part.TryGetProperty("type", out var type) && type.GetString() == "output_text" &&
-                            part.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String)
-                            output.Append(t.GetString());
-                    }
-                }
-            }
-            responseText = output.ToString();
+            responseText = await _aiTextService.GenerateAsync(
+                instructions,
+                $"TÊN PDF: {document.OriginalFileName}\n{(partial ? "CHÚ Ý: DỮ LIỆU CHỈ LÀ CÁC ĐOẠN TRÍCH CHỌN.\n" : "")}CHUNKS:\n{context}",
+                request.QuestionCount == 5 ? 2500 : 4400,
+                ct, schema);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (AiGenerationException ex)
         {
-            return StatusCode(504, new { message = "OpenAI phản hồi quá lâu. Thử tạo 5 câu." });
-        }
-        catch (HttpRequestException)
-        {
-            return StatusCode(502, new { message = "Không kết nối được OpenAI. Kiểm tra mạng Backend." });
-        }
-        catch (JsonException)
-        {
-            return StatusCode(502, new { message = "OpenAI trả về phản hồi không đọc được." });
+            return StatusCode(ex.StatusCode, new { message = ex.Message });
         }
 
         GeneratedQuizData? generated;

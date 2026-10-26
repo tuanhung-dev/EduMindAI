@@ -4,10 +4,7 @@ using EduMind.Api.Data;
 using EduMind.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
 
 namespace EduMind.Api.Controllers;
 
@@ -22,25 +19,22 @@ public sealed class SummarizeDocumentRequest
 public sealed class DocumentSummariesController : ControllerBase
 {
     private const int MaxChunksToRead = 1000;
-    private const int MaxChunksToSend = 16;
-    private const int MaxCharsPerChunk = 1000;
-    private const int MaxContextChars = 19000;
+    private const int MaxChunksToSend = 8;
+    private const int MaxCharsPerChunk = 850;
+    private const int MaxContextChars = 7400;
 
     private readonly EduMindDbContext _db;
-    private readonly IConfiguration _config;
+    private readonly AiTextService _aiTextService;
     private readonly IWebHostEnvironment _environment;
-    private readonly IHttpClientFactory _httpFactory;
 
     public DocumentSummariesController(
         EduMindDbContext db,
-        IConfiguration config,
         IWebHostEnvironment environment,
-        IHttpClientFactory httpFactory)
+        AiTextService aiTextService)
     {
         _db = db;
-        _config = config;
         _environment = environment;
-        _httpFactory = httpFactory;
+        _aiTextService = aiTextService;
     }
 
     // Bước 13: tóm tắt các chunks có sẵn. Chỉ phục vụ bản demo Development.
@@ -129,12 +123,6 @@ public sealed class DocumentSummariesController : ControllerBase
         bool partial = selected.Count < totalChunks || anyTruncation;
         var pages = selected.Select(x => x.PageNumber).Distinct().OrderBy(x => x).ToArray();
 
-        var apiKey = _config["OpenAI:ApiKey"]?.Trim();
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return StatusCode(503, new { message = "Chưa cấu hình OpenAI API Key trong Backend." });
-
-        var model = _config["OpenAI:Model"]?.Trim() is { Length: > 0 } configuredModel
-            ? configuredModel : "gpt-4.1-mini";
         var lengthInstruction = level == "short"
             ? "Viết một đoạn tổng quan và 5 ý chính ngắn, rõ ràng."
             : "Viết tổng quan, các phần nội dung chính, thuật ngữ quan trọng và các ý cần ôn tập.";
@@ -149,61 +137,19 @@ public sealed class DocumentSummariesController : ControllerBase
             {(partial ? "Đây chỉ là các đoạn được lấy mẫu, phải nói rõ đây là tóm tắt một phần, không được khẳng định bao quát toàn bộ tài liệu." : "Các đoạn cung cấp được chọn từ tài liệu đã lập chỉ mục.")}
             """;
 
-        using var apiRequest = new HttpRequestMessage(
-            HttpMethod.Post, "https://api.openai.com/v1/responses");
-        apiRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        apiRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        apiRequest.Content = JsonContent.Create(new
-        {
-            model,
-            instructions,
-            input = $"TÊN TÀI LIỆU: {document.OriginalFileName}\n\nNỘI DUNG:\n{context}",
-            store = false,
-            max_output_tokens = level == "short" ? 750 : 1300
-        });
-
         try
         {
-            var client = _httpFactory.CreateClient("EduMindOpenAI");
-            using var response = await client.SendAsync(apiRequest, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return StatusCode(502, OpenAiResponseInspector.PublicError(
-                    response, body, "OpenAI chưa thể tóm tắt tài liệu."));
-            }
-
-            using var result = JsonDocument.Parse(body);
-            var summary = new StringBuilder();
-            if (result.RootElement.TryGetProperty("output", out var output) &&
-                output.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in output.EnumerateArray())
-                {
-                    if (!item.TryGetProperty("content", out var content) ||
-                        content.ValueKind != JsonValueKind.Array)
-                        continue;
-                    foreach (var part in content.EnumerateArray())
-                    {
-                        if (part.TryGetProperty("type", out var type) &&
-                            type.ValueKind == JsonValueKind.String &&
-                            type.GetString() == "output_text" &&
-                            part.TryGetProperty("text", out var text) &&
-                            text.ValueKind == JsonValueKind.String)
-                            summary.AppendLine(text.GetString());
-                    }
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(summary.ToString()))
-                return StatusCode(502, new { message = "AI chưa trả về văn bản tóm tắt." });
+            var summary = await _aiTextService.GenerateAsync(
+                instructions,
+                $"TÊN TÀI LIỆU: {document.OriginalFileName}\n\nNỘI DUNG:\n{context}",
+                level == "short" ? 800 : 1400,
+                cancellationToken);
 
             return Ok(new
             {
                 documentId = id,
                 level,
-                summary = summary.ToString().Trim(),
+                summary,
                 coverage = new
                 {
                     totalChunks,
@@ -222,17 +168,9 @@ public sealed class DocumentSummariesController : ControllerBase
                 })
             });
         }
-        catch (HttpRequestException)
+        catch (AiGenerationException ex)
         {
-            return StatusCode(502, new { message = "Không kết nối được dịch vụ AI." });
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return StatusCode(504, new { message = "Dịch vụ AI phản hồi quá chậm." });
-        }
-        catch (JsonException)
-        {
-            return StatusCode(502, new { message = "Phản hồi AI không đúng định dạng." });
+            return StatusCode(ex.StatusCode, new { message = ex.Message });
         }
     }
 }
