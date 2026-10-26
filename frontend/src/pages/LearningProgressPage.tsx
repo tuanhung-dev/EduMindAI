@@ -93,7 +93,7 @@ export default function LearningProgressPage() {
         </div>
       </div>
 
-      <p className="progress-demo-note">Bản Development: tiến độ đang được tổng hợp chung trên máy, chưa phân tách theo tài khoản học viên.</p>
+      <p className="progress-demo-note">Bản Development: tiến độ được tổng hợp từ các bài đã nộp của tài khoản đang đăng nhập. Dữ liệu cũ chưa gán chủ sở hữu sẽ không được tính.</p>
       {loading && <div role="status" className="progress-state">Đang tải thống kê từ Backend…</div>}
       {error && <div className="progress-error" role="alert">{error} <button type="button" onClick={() => { setLoading(true); load(); }}>Thử lại</button></div>}
 

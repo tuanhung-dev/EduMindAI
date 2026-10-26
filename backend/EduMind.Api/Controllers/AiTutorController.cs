@@ -125,6 +125,28 @@ public class AiTutorController : ControllerBase
             .Take(4)
             .ToList();
 
+        // Các câu hỏi tổng quan thường không chứa từ khóa xuất hiện nguyên văn
+        // trong PDF. Thay vì trả lời rỗng, lấy tối đa 4 đoạn trải đều tài liệu.
+        // Đây chỉ là lấy mẫu, KHÔNG phải tìm kiếm ngữ nghĩa/RAG đầy đủ.
+        bool isOverviewQuestion = Regex.IsMatch(
+            question,
+            @"tóm tắt|tổng quan|nội dung chính|chủ đề chính|ý chính|tài liệu (này )?(nói|đề cập)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (isOverviewQuestion)
+        {
+            var sampleIndices = new[]
+            {
+                0, chunks.Count / 3, (chunks.Count * 2) / 3, chunks.Count - 1
+            }.Distinct();
+            relevant = sampleIndices.Select(i => new
+            {
+                PageNumber = chunks[i].PageNumber,
+                ChunkIndex = chunks[i].ChunkIndex,
+                Content = chunks[i].Content,
+                Score = 0
+            }).ToList();
+        }
+
         if (relevant.Count == 0)
         {
             return Ok(new
@@ -181,6 +203,7 @@ public class AiTutorController : ControllerBase
             CÂU HỎI:
             {question}
 
+            {(isOverviewQuestion ? "LƯU Ý: Bốn đoạn dưới đây chỉ là mẫu trải đều tài liệu. Không khẳng định đã đọc toàn bộ PDF." : "")}
             NỘI DUNG TÀI LIỆU:
             {context}
             """;
@@ -268,6 +291,7 @@ public class AiTutorController : ControllerBase
                 documentId = request.DocumentId,
                 question,
                 answer,
+                sampledOverview = isOverviewQuestion,
 
                 // Cac doan duoc dung lam ngu canh
                 sources = relevant.Select(c => new

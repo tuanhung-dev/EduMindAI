@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("EduMind.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+183157239d1c05f68cd1e91eb494fa4cb1c74199")]
 [assembly: System.Reflection.AssemblyProductAttribute("EduMind.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("EduMind.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
