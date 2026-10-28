@@ -2,15 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using EduMind.Api.Data;
 using EduMind.Api.Models;
+using EduMind.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace EduMind.Api.Controllers;
 
 /// <summary>
-/// Bước 16: báo cáo dựa hoàn toàn trên các lượt thi đã NỘP ở Bước 15.
-/// API demo chỉ truy cập trong Development; chưa có định danh người học.
-/// KHÔNG triển khai ra Internet trước khi thêm Identity + kiểm tra quyền sở hữu.
+/// Báo cáo dựa trên lượt thi đã nộp của đúng tài khoản đăng nhập.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -18,19 +17,19 @@ namespace EduMind.Api.Controllers;
 public sealed class LearningProgressController : ControllerBase
 {
     private readonly EduMindDbContext _db;
-    private readonly IWebHostEnvironment _environment;
+    private readonly LearningApiAccess _learningAccess;
 
-    public LearningProgressController(EduMindDbContext db, IWebHostEnvironment environment)
+    public LearningProgressController(EduMindDbContext db, LearningApiAccess learningAccess)
     {
         _db = db;
-        _environment = environment;
+        _learningAccess = learningAccess;
     }
 
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int? documentId, CancellationToken ct)
     {
-        if (!_environment.IsDevelopment())
-            return StatusCode(403, new { message = "Development only. Yêu cầu đăng nhập/phân quyền trước khi phát hành." });
+        if (!_learningAccess.Enabled)
+            return StatusCode(403, new { message = "Learning API chua duoc bat tren may chu." });
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         if (documentId.HasValue && documentId.Value <= 0)

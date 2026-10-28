@@ -60,8 +60,10 @@ export default function QuizResultPage() {
               <div className="quiz-flow-explanation"><b>Giải thích:</b> {q.explanation ?? "Chưa có lời giải."}</div>
               {q.sourceExcerpt && <div className="quiz-flow-source"><b>Đoạn tài liệu liên quan:</b> {q.sourceExcerpt}</div>}
               {q.sourcePageNumber && <a target="_blank" rel="noreferrer" className="quiz-flow-link"
-                href={`${getDocumentFileUrl(attempt.documentId)}#page=${Math.max(1, q.sourcePageNumber)}`}>
-                ↗ Mở trang {q.sourcePageNumber} của tài liệu PDF
+                href={`${getDocumentFileUrl(attempt.documentId)}${(attempt.documentName ?? "").toLowerCase().endsWith(".pdf") ? `#page=${Math.max(1, q.sourcePageNumber)}` : ""}`}>
+                ↗ {(attempt.documentName ?? "").toLowerCase().endsWith(".pdf")
+                  ? `Mở trang ${q.sourcePageNumber} trong PDF`
+                  : `Tải Word và đối chiếu phần ${q.sourcePageNumber}`}
               </a>}
             </article>
           ))}

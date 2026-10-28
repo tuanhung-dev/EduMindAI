@@ -3,6 +3,8 @@ using System.Security.Claims;
 
 using EduMind.Api.Data;
 using EduMind.Api.Models;
+using EduMind.Api.Services;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UglyToad.PdfPig;
@@ -17,17 +19,26 @@ public class DocumentsController : ControllerBase
 {
     private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private bool IsAdmin => User.IsInRole("Admin");
-    private const long MaxPdfSize = 10 * 1024 * 1024;
+    private const long MaxDocumentSize = 30 * 1024 * 1024;
 
     private readonly EduMindDbContext _db;
     private readonly IWebHostEnvironment _environment;
+    private readonly LearningApiAccess _learningAccess;
+    private readonly ILogger<DocumentsController> _logger;
+    private readonly DocumentIndexingService _indexer;
 
     public DocumentsController(
         EduMindDbContext db,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        LearningApiAccess learningAccess,
+        ILogger<DocumentsController> logger,
+        DocumentIndexingService indexer)
     {
         _db = db;
         _environment = environment;
+        _learningAccess = learningAccess;
+        _logger = logger;
+        _indexer = indexer;
     }
 
     // ========================================
@@ -39,11 +50,11 @@ public class DocumentsController : ControllerBase
     public async Task<IActionResult> GetAll(
         CancellationToken cancellationToken)
     {
-        if (!_environment.IsDevelopment())
+        if (!_learningAccess.Enabled)
         {
             return StatusCode(
                 403,
-                "API chi duoc su dung trong Development."
+                "Learning API chua duoc bat tren may chu."
             );
         }
 
@@ -71,30 +82,31 @@ public class DocumentsController : ControllerBase
     // ========================================
 
     [HttpPost]
+    [EnableRateLimiting("pdf-write")]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(12 * 1024 * 1024)]
+    [RequestSizeLimit(32 * 1024 * 1024)]
     public async Task<IActionResult> Upload(
         [FromForm] IFormFile? file,
         [FromForm] int subjectId,
         CancellationToken cancellationToken)
     {
-        if (!_environment.IsDevelopment())
+        if (!_learningAccess.Enabled)
         {
             return StatusCode(
                 403,
-                "API chi duoc su dung trong Development."
+                "Learning API chua duoc bat tren may chu."
             );
         }
 
         // Kiem tra file
         if (file == null || file.Length == 0)
         {
-            return BadRequest("Vui long chon file PDF.");
+            return BadRequest("Vui lòng chọn PDF hoặc Word .docx.");
         }
 
-        if (file.Length > MaxPdfSize)
+        if (file.Length > MaxDocumentSize)
         {
-            return BadRequest("File khong duoc qua 10 MB.");
+            return BadRequest("File khong duoc qua 30 MB.");
         }
 
         string originalName =
@@ -102,12 +114,9 @@ public class DocumentsController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(originalName) ||
             originalName.Length > 255 ||
-            !string.Equals(
-                Path.GetExtension(originalName),
-                ".pdf",
-                StringComparison.OrdinalIgnoreCase))
+            !DocumentContentReader.IsSupported(originalName))
         {
-            return BadRequest("Chi chap nhan file PDF.");
+            return BadRequest("Chỉ chấp nhận PDF hoặc Word .docx (không hỗ trợ .doc cũ).");
         }
 
         // Kiem tra mon hoc
@@ -124,28 +133,15 @@ public class DocumentsController : ControllerBase
         }
 
         // Kiem tra 5 byte dau cua PDF
-        if (file.Length < 5)
-        {
-            return BadRequest("File PDF khong hop le.");
-        }
-
+        var word = DocumentContentReader.IsWord(originalName);
+        if (file.Length < 5) return BadRequest("Tài liệu không hợp lệ.");
         await using var input = file.OpenReadStream();
-
         byte[] signature = new byte[5];
-
-        await input.ReadExactlyAsync(
-            signature.AsMemory(),
-            cancellationToken);
-
-        string signatureText =
-            System.Text.Encoding.ASCII.GetString(signature);
-
-        if (signatureText != "%PDF-")
-        {
-            return BadRequest(
-                "Noi dung file khong phai PDF hop le."
-            );
-        }
+        await input.ReadExactlyAsync(signature.AsMemory(), cancellationToken);
+        var validHeader = word
+            ? signature[0] == 0x50 && signature[1] == 0x4B && signature[2] == 3 && signature[3] == 4
+            : System.Text.Encoding.ASCII.GetString(signature) == "%PDF-";
+        if (!validHeader) return BadRequest("Nội dung không phải PDF/DOCX hợp lệ.");
 
         // Tao thu muc luu PDF
         string storageFolder = Path.Combine(
@@ -157,7 +153,7 @@ public class DocumentsController : ControllerBase
 
         // Tao ten ngau nhien de tranh trung file
         string storedFileName =
-            $"{Guid.NewGuid():N}.pdf";
+            $"{Guid.NewGuid():N}{(word ? ".docx" : ".pdf")}";
 
         string filePath = Path.Combine(
             storageFolder,
@@ -183,6 +179,15 @@ public class DocumentsController : ControllerBase
                     cancellationToken);
             }
 
+            // Validate actual bytes AND decompression limits before writing DB metadata.
+            try { DocumentUploadGuard.ValidateSavedFile(filePath, word); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning("Rejected suspicious document upload ({ErrorType})", ex.GetType().Name);
+                System.IO.File.Delete(filePath);
+                return BadRequest("Tệp PDF/Word không hợp lệ, quá lớn hoặc chứa cấu trúc không an toàn.");
+            }
+
             // Luu thong tin vao MySQL
             var document = new Document
             {
@@ -190,7 +195,9 @@ public class DocumentsController : ControllerBase
                 OwnerUserId = CurrentUserId,
                 OriginalFileName = originalName,
                 StoredFileName = storedFileName,
-                ContentType = "application/pdf",
+                ContentType = word
+                    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    : "application/pdf",
                 SizeBytes = file.Length,
                 Status = "Uploaded",
                 CreatedAtUtc = DateTime.UtcNow
@@ -233,12 +240,12 @@ public class DocumentsController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        // Chi cho phep trong moi truong Development
-        if (!_environment.IsDevelopment())
+        // Cho phep khi Learning API duoc bat
+        if (!_learningAccess.Enabled)
         {
             return StatusCode(
                 403,
-                "API chi hoat dong trong Development."
+                "Learning API chua duoc bat tren may chu."
             );
         }
 
@@ -266,10 +273,7 @@ public class DocumentsController : ControllerBase
                 Path.GetFileNameWithoutExtension(storedFileName),
                 "N",
                 out _) ||
-            !string.Equals(
-                Path.GetExtension(storedFileName),
-                ".pdf",
-                StringComparison.OrdinalIgnoreCase))
+            !DocumentContentReader.IsSupported(storedFileName))
         {
             return BadRequest(
                 "Ten file luu tru khong hop le."
@@ -294,7 +298,9 @@ public class DocumentsController : ControllerBase
         // 6. Tra file PDF ve trinh duyet
         return PhysicalFile(
             filePath,
-            "application/pdf",
+            DocumentContentReader.IsWord(storedFileName)
+                ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                : "application/pdf",
             enableRangeProcessing: true);
     }
 
@@ -305,291 +311,98 @@ public class DocumentsController : ControllerBase
     // =========================================
 
     [HttpGet("{id:int}/text")]
-    public async Task<IActionResult> ExtractText(
-        int id,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> ExtractText(int id, CancellationToken cancellationToken)
     {
-        // 1. Chi cho phep trong moi truong Development
-        if (!_environment.IsDevelopment())
-        {
-            return StatusCode(
-                403,
-                "API chi duoc su dung trong Development."
-            );
-        }
-
-        // 2. Tim tai lieu theo ID trong MySQL
-        var document = await _db.Documents
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                d => d.Id == id && (d.OwnerUserId == CurrentUserId || (IsAdmin && d.OwnerUserId != null)),
-                cancellationToken);
-
-        if (document == null)
-        {
-            return NotFound(
-                "Khong tim thay tai lieu trong MySQL."
-            );
-        }
-
-        // 3. Kiem tra ten file da luu
-        string storedName = document.StoredFileName;
-
-        if (string.IsNullOrWhiteSpace(storedName) ||
-            Path.GetFileName(storedName) != storedName ||
-            !Guid.TryParseExact(
-                Path.GetFileNameWithoutExtension(storedName),
-                "N",
-                out _) ||
-            !string.Equals(
-                Path.GetExtension(storedName),
-                ".pdf",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return BadRequest(
-                "Ten file luu tru khong hop le."
-            );
-        }
-
-        // 4. Xac dinh duong dan PDF
-        string filePath = Path.Combine(
-            _environment.ContentRootPath,
-            "Storage",
-            "Documents",
-            storedName);
-
-        if (!System.IO.File.Exists(filePath))
-        {
-            return NotFound(
-                "File PDF khong ton tai tren may chu."
-            );
-        }
-
+        if (!_learningAccess.Enabled) return StatusCode(403, "Learning API chưa được bật.");
+        var document = await _db.Documents.AsNoTracking().FirstOrDefaultAsync(
+            d => d.Id == id && (d.OwnerUserId == CurrentUserId || (IsAdmin && d.OwnerUserId != null)),
+            cancellationToken);
+        if (document == null) return NotFound("Không tìm thấy tài liệu.");
+        if (!ValidStoredName(document.StoredFileName)) return BadRequest("Tên file không hợp lệ.");
+        string path = Path.Combine(_environment.ContentRootPath, "Storage", "Documents", document.StoredFileName);
+        if (!System.IO.File.Exists(path)) return NotFound("File không tồn tại.");
         try
         {
-            // 5. Mo tai lieu PDF
-            using var pdf = PdfDocument.Open(filePath);
-
-            // Giai doan thu nghiem: doc toi da 5 trang
-            int pageLimit = Math.Min(pdf.NumberOfPages, 5);
-
-            var pages = new List<object>();
-
-            bool hasExtractableText = false;
-
-            // 6. Doc noi dung theo tung trang
-            for (int pageNumber = 1;
-                 pageNumber <= pageLimit;
-                 pageNumber++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var page = pdf.GetPage(pageNumber);
-
-                string text =
-                    ContentOrderTextExtractor.GetText(page);
-
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    hasExtractableText = true;
-                }
-
-                // Chi tra ve toi da 5000 ky tu/trang
-                // de tranh JSON qua dai khi thu nghiem
-                if (text.Length > 5000)
-                {
-                    text = text[..5000];
-                }
-
-                pages.Add(new
-                {
-                    pageNumber,
-                    text
-                });
-            }
-
-            // 7. Tra ket qua JSON
+            bool word = DocumentContentReader.IsWord(document.StoredFileName);
+            var result = DocumentContentReader.Read(path, word, maxParts: 5, ct: cancellationToken);
             return Ok(new
             {
-                documentId = document.Id,
-                fileName = document.OriginalFileName,
-                totalPages = pdf.NumberOfPages,
-                extractedPages = pageLimit,
-                hasExtractableText,
-                pages
+                documentId = document.Id, fileName = document.OriginalFileName,
+                totalPages = result.TotalParts, extractedPages = result.Parts.Count,
+                unit = word ? "section" : "page",
+                hasExtractableText = result.Parts.Any(x => !string.IsNullOrWhiteSpace(x.Text)),
+                pages = result.Parts.Select(x => new { pageNumber = x.Number, text = x.Text.Length > 5000 ? x.Text[..5000] : x.Text })
             });
         }
-        catch (Exception ex)
-            when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return UnprocessableEntity(new
-            {
-                message = "Khong the trich xuat PDF.",
-                detail = ex.Message
-            });
+            _logger.LogWarning(ex, "Document extraction failed for {DocumentId}", id);
+            return UnprocessableEntity(new { message = "Không thể trích xuất nội dung tài liệu." });
         }
     }
 
+    private static bool ValidStoredName(string name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        Path.GetFileName(name) == name &&
+        Guid.TryParseExact(Path.GetFileNameWithoutExtension(name), "N", out _) &&
+        DocumentContentReader.IsSupported(name);
 
-    // POST /api/documents/{id}/index
-    // Doc PDF va luu cac doan van ban vao MySQL
 
+    // Existing synchronous route stays available for older clients.
     [HttpPost("{id:int}/index")]
-    public async Task<IActionResult> IndexDocument(
-        int id,
-        CancellationToken cancellationToken)
+    [EnableRateLimiting("pdf-write")]
+    public async Task<IActionResult> IndexDocument(int id, CancellationToken ct)
     {
-        if (!_environment.IsDevelopment())
-            return StatusCode(403, "Development only.");
-
-        var document = await _db.Documents
-            .FirstOrDefaultAsync(
-                d => d.Id == id && (d.OwnerUserId == CurrentUserId || (IsAdmin && d.OwnerUserId != null)),
-                cancellationToken);
-
-        if (document == null)
-            return NotFound("Khong tim thay tai lieu.");
-
-        string storedName = document.StoredFileName;
-
-        if (string.IsNullOrWhiteSpace(storedName) ||
-            Path.GetFileName(storedName) != storedName ||
-            !Guid.TryParseExact(
-                Path.GetFileNameWithoutExtension(storedName),
-                "N",
-                out _) ||
-            !string.Equals(
-                Path.GetExtension(storedName),
-                ".pdf",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return BadRequest("Ten file khong hop le.");
-        }
-
-        string filePath = Path.Combine(
-            _environment.ContentRootPath,
-            "Storage",
-            "Documents",
-            storedName);
-
-        if (!System.IO.File.Exists(filePath))
-            return NotFound("File PDF khong ton tai.");
-
-        var chunks = new List<DocumentChunk>();
-        int totalPages;
-
+        if (!_learningAccess.Enabled) return StatusCode(403, "Learning API chưa được bật.");
+        if (!await _db.Documents.AsNoTracking().AnyAsync(d => d.Id == id &&
+            d.OwnerUserId == CurrentUserId, ct)) return NotFound();
+        // Don't race with a queued/processing background re-index of the same document.
+        var status = await _db.Documents.AsNoTracking().Where(d => d.Id == id)
+            .Select(d => d.Status).SingleAsync(ct);
+        if (status is "Queued" or "Processing") return Conflict(new { message = "Tài liệu đang được xử lý nền." });
         try
         {
-            using var pdf = PdfDocument.Open(filePath);
-
-            totalPages = pdf.NumberOfPages;
-
-            // Gioi han 50 trang cho ban demo
-            if (totalPages > 50)
-            {
-                return BadRequest(
-                    "Ban demo chi xu ly toi da 50 trang.");
-            }
-
-            const int chunkSize = 1800;
-            const int overlap = 200;
-
-            int chunkIndex = 0;
-
-            for (int pageNumber = 1;
-                 pageNumber <= totalPages;
-                 pageNumber++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var page = pdf.GetPage(pageNumber);
-
-                string text = ContentOrderTextExtractor
-                    .GetText(page)
-                    .Trim();
-
-                if (string.IsNullOrWhiteSpace(text))
-                    continue;
-
-                // Gioi han de tranh xu ly PDF qua lon
-                if (text.Length > 40000)
-                {
-                    return BadRequest(
-                        $"Trang {pageNumber} co qua nhieu van ban.");
-                }
-
-                for (int start = 0;
-                     start < text.Length;
-                     start += chunkSize - overlap)
-                {
-                    int length = Math.Min(
-                        chunkSize,
-                        text.Length - start);
-
-                    string content = text.Substring(
-                        start,
-                        length);
-
-                    chunks.Add(new DocumentChunk
-                    {
-                        DocumentId = id,
-                        PageNumber = pageNumber,
-                        ChunkIndex = chunkIndex++,
-                        Content = content,
-                        CreatedAtUtc = DateTime.UtcNow
-                    });
-
-                    if (start + length >= text.Length)
-                        break;
-                }
-            }
+            var result = await _indexer.IndexAsync(id, ct);
+            return Ok(new { documentId = id, totalPages = result.TotalPages,
+                chunkCount = result.ChunkCount, status = "Ready", unit = result.Unit,
+                message = "Xử lý tài liệu thành công." });
         }
-        catch (Exception ex)
-            when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return UnprocessableEntity(
-                "Khong the doc noi dung PDF.");
+            _logger.LogWarning(ex, "Indexing failed for document {DocumentId}", id);
+            return UnprocessableEntity(new { message = "Không thể lập chỉ mục tài liệu; kiểm tra định dạng, OCR và log Backend." });
         }
-
-        if (chunks.Count == 0)
-        {
-            return UnprocessableEntity(
-                "PDF khong co van ban de trich xuat. " +
-                "Co the tai lieu la ban scan.");
-        }
-
-        // Dung transaction de thay the du lieu cu an toan
-        await using var transaction =
-            await _db.Database.BeginTransactionAsync(
-                cancellationToken);
-
-        var oldChunks = await _db.DocumentChunks
-            .Where(c => c.DocumentId == id)
-            .ToListAsync(cancellationToken);
-
-        _db.DocumentChunks.RemoveRange(oldChunks);
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        _db.DocumentChunks.AddRange(chunks);
-
-        document.Status = "Ready";
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-
-        return Ok(new
-        {
-            documentId = id,
-            totalPages,
-            chunkCount = chunks.Count,
-            status = document.Status,
-            message = "Xu ly PDF thanh cong."
-        });
     }
 
+    // D5: a crash-safe (single-process) DB-backed queue without a new SQL table.
+    [HttpPost("{id:int}/index/background")]
+    [EnableRateLimiting("pdf-write")]
+    public async Task<IActionResult> EnqueueIndex(int id, CancellationToken ct)
+    {
+        if (!_learningAccess.Enabled) return StatusCode(403);
+        var doc = await _db.Documents.FirstOrDefaultAsync(d => d.Id == id &&
+            d.OwnerUserId == CurrentUserId, ct);
+        if (doc == null) return NotFound();
+        if (!DocumentIndexingService.ValidStoredName(doc.StoredFileName)) return BadRequest("Tên tệp không hợp lệ.");
+        if (doc.Status is not ("Queued" or "Processing"))
+        {
+            doc.Status = "Queued";
+            await _db.SaveChangesAsync(ct);
+        }
+        return Accepted($"/api/documents/{id}/index/status", new { documentId = id, status = doc.Status });
+    }
 
+    [HttpGet("{id:int}/index/status")]
+    public async Task<IActionResult> IndexStatus(int id, CancellationToken ct)
+    {
+        if (!_learningAccess.Enabled) return StatusCode(403);
+        var doc = await _db.Documents.AsNoTracking()
+            .Where(d => d.Id == id && d.OwnerUserId == CurrentUserId)
+            .Select(d => new { d.Id, d.Status }).FirstOrDefaultAsync(ct);
+        if (doc == null) return NotFound();
+        var count = await _db.DocumentChunks.AsNoTracking().CountAsync(c => c.DocumentId == id, ct);
+        return Ok(new { documentId = id, status = doc.Status, chunkCount = count });
+    }
 
     // GET /api/documents/{id}/chunks
 
@@ -598,8 +411,8 @@ public class DocumentsController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        if (!_environment.IsDevelopment())
-            return StatusCode(403, "Development only.");
+        if (!_learningAccess.Enabled)
+            return StatusCode(403, "Learning API chua duoc bat tren may chu.");
 
         bool exists = await _db.Documents
             .AnyAsync(

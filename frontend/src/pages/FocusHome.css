@@ -1,0 +1,26 @@
+
+.focus-home{display:grid;gap:24px;max-width:1220px;margin:0 auto;color:var(--text-primary,#17233a)}
+.focus-hero{padding:clamp(26px,5vw,64px);border-radius:24px;background:linear-gradient(135deg,#12315b,#304cb4);color:#fff;overflow:hidden}
+.focus-eyebrow{font-size:.73rem;letter-spacing:.12em;font-weight:800;opacity:.78}
+.focus-hero h1{font-size:clamp(1.7rem,3vw,2.8rem);line-height:1.19;max-width:740px;margin:15px 0}
+.focus-hero p{max-width:670px;line-height:1.7;color:#e4eaff}
+.focus-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+.focus-button{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:12px;padding:12px 20px;font-weight:700}
+.focus-button-primary{background:#fff;color:#173678}
+.focus-button-secondary{border:1px solid #c1d1ff;color:#fff}
+.focus-feature-grid,.focus-path-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.focus-feature,.focus-path,.focus-paths{border:1px solid #dde5f1;border-radius:20px;background:#fff;padding:26px}
+.focus-feature{display:flex;flex-direction:column;align-items:flex-start;gap:9px}
+.focus-feature-icon{font-size:2rem;color:#384fc5}
+.focus-feature>span{font-size:.76rem;font-weight:800;letter-spacing:.07em;color:#687693}
+.focus-feature h2{font-size:1.45rem;margin:0}
+.focus-feature p,.focus-path p{line-height:1.65;color:#57677d;flex:1}
+.focus-feature a,.focus-section-heading a{font-weight:700;color:#3047af;text-decoration:none}
+.focus-feature a:hover,.focus-section-heading a:hover{text-decoration:underline}
+.focus-section-heading{display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:18px}
+.focus-section-heading h2{margin:8px 0 0}
+.focus-paths{background:#f8faff}
+.focus-path-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.focus-path{padding:20px}
+.focus-path b{color:#526bd0}.focus-path h3{margin:10px 0 0}
+@media(max-width:800px){.focus-feature-grid,.focus-path-grid{grid-template-columns:1fr}.focus-feature,.focus-paths{padding:20px}.focus-section-heading{align-items:flex-start}}

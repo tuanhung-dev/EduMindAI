@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -148,6 +149,55 @@ public sealed class AiTextService
             }
         }
         return RequiredText(string.Join("\n", parts), "OpenAI");
+    }
+
+    public bool SupportsStreaming => (_config["AI:Provider"] ?? "OpenAI")
+        .Equals("Ollama", StringComparison.OrdinalIgnoreCase);
+
+    // Ollama emits one JSON object per line. Forward only actual message.content,
+    // never expose model reasoning or raw protocol frames to the browser.
+    public async IAsyncEnumerable<string> StreamOllamaAsync(
+        string instructions, string input, int maxTokens,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        if (!SupportsStreaming)
+            throw new AiGenerationException(409, "Streaming requires Ollama.");
+        var baseUrl = (_config["AI:Ollama:BaseUrl"] ?? "http://127.0.0.1:11434").Trim().TrimEnd('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme != "http" ||
+            !uri.IsLoopback || uri.AbsolutePath != "/" || uri.Query.Length > 0 || uri.Fragment.Length > 0)
+            throw new AiGenerationException(503, "Ollama must use a local HTTP address.");
+        var model = _config["AI:Ollama:Model"]?.Trim();
+        if (string.IsNullOrWhiteSpace(model)) model = "qwen3:4b-instruct";
+        using var request = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/api/chat")
+        {
+            Content = JsonContent.Create(new {
+                model, stream = true,
+                messages = new object[] { new { role = "system", content = instructions }, new { role = "user", content = input } },
+                options = new { num_ctx = 8192, num_predict = maxTokens, temperature = 0.2 }
+            })
+        };
+        using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode)
+            throw new AiGenerationException(502, $"Ollama streaming HTTP {(int)response.StatusCode}.");
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+        bool completed = false;
+        while (await reader.ReadLineAsync(ct) is { } line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            using var json = JsonDocument.Parse(line);
+            if (json.RootElement.TryGetProperty("error", out var error))
+                throw new AiGenerationException(502, "Ollama streaming error: " + error.ToString());
+            if (json.RootElement.TryGetProperty("message", out var msg) &&
+                msg.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
+            {
+                string? delta = content.GetString();
+                if (!string.IsNullOrEmpty(delta)) yield return delta;
+            }
+            if (json.RootElement.TryGetProperty("done", out var done) && done.ValueKind == JsonValueKind.True)
+            { completed = true; break; }
+        }
+        if (!completed) throw new AiGenerationException(502, "Ollama stream interrupted before completion.");
     }
 
     private static string RequiredText(string? output, string provider)

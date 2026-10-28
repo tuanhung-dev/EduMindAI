@@ -12,6 +12,7 @@ import SubjectsPage from "./pages/SubjectsPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AiTutorPage from "./pages/AiTutorPage";
 import QuizzesPage from "./pages/QuizzesPage";
+import StudyPlanPage from "./pages/StudyPlanPage";
 import QuizTakePage from "./pages/QuizTakePage";
 import QuizResultPage from "./pages/QuizResultPage";
 import LearningProgressPage from "./pages/LearningProgressPage";
@@ -28,7 +29,13 @@ import "./App.css";
 
 function Private({ children }: { children: React.ReactNode }) {
   const { user, checking } = useAuth();
-  if (checking) return <p style={{ padding: 32 }}>Đang kiểm tra đăng nhập…</p>;
+  if (checking) return (
+    <div className="ux29-auth-loading" role="status" aria-live="polite">
+      <span className="ux29-spinner" aria-hidden="true" />
+      <strong>Đang xác thực tài khoản</strong>
+      <p>EduMind AI đang kiểm tra phiên đăng nhập của bạn…</p>
+    </div>
+  );
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -68,6 +75,9 @@ function AppRoutes() {
             path="ai-tutor"
             element={<AiTutorPage />}
           />
+
+          <Route path="flashcards" element={<Navigate to="/app/ai-tutor" replace />} />
+          <Route path="study-plan" element={<StudyPlanPage />} />
 
           <Route
             path="quizzes"

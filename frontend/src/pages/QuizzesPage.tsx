@@ -18,6 +18,7 @@ export default function QuizzesPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [count, setCount] = useState<5 | 10>(5);
   const [difficulty, setDifficulty] = useState<QuizDifficulty>("medium");
+  const [topic, setTopic] = useState("");
   const [quizzes, setQuizzes] = useState<QuizListItem[]>([]);
   const [preview, setPreview] = useState<QuizDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +78,7 @@ export default function QuizzesPage() {
     if (!selectedId || busy) return;
     setError(""); setNotice(""); setHistoryError(""); setAttempts([]); setGenerating(true);
     try {
-      const created = await generateQuiz(selectedId, count, difficulty);
+      const created = await generateQuiz(selectedId, count, difficulty, topic.trim());
       setNotice(`${created.message} Đề số #${created.quizId} đã được tạo.`);
       try {
         const [items, detail] = await Promise.all([listQuizzes(), getQuiz(created.quizId)]);
@@ -107,7 +108,7 @@ export default function QuizzesPage() {
     <section className="quizzes-page">
       <div className="quizzes-header">
         <div>
-          <span className="quizzes-eyebrow">EDUMIND AI / BƯỚC 14 + 15</span>
+          <span className="quizzes-eyebrow">EDUMIND AI / BƯỚC 22</span>
           <h1>Luyện thi AI từ tài liệu PDF</h1>
           <p>Tạo đề từ tài liệu PDF, bắt đầu làm bài, nộp đáp án và xem kết quả chấm điểm.</p>
         </div>
@@ -128,6 +129,11 @@ export default function QuizzesPage() {
           </select>
           {!loading && documents.length === 0 && <p className="quizzes-hint">Kho tài liệu trống. <Link to="/app/documents">Tải PDF lên</Link> để bắt đầu.</p>}
           {selectedDocument && <p className="quizzes-hint">Trạng thái PDF: <b>{selectedDocument.status}</b>. Nếu chưa lập chỉ mục, hãy <Link to={`/app/ai-tutor?documentId=${selectedDocument.id}`}>xử lý PDF tại Gia sư AI</Link>.</p>}
+          <label htmlFor="quiz-topic">Chủ đề muốn ôn tập (không bắt buộc)</label>
+          <input id="quiz-topic" type="text" maxLength={100} disabled={busy}
+            value={topic} onChange={(e) => setTopic(e.target.value)}
+            placeholder="Ví dụ: khóa chính, SQL JOIN, chuẩn hóa dữ liệu" />
+          <p className="quizzes-hint">Để trống để tạo đề tổng quan. Nếu chọn chủ đề, AI sẽ ưu tiên phần PDF phù hợp.</p>
           <label htmlFor="quiz-count">Số lượng câu hỏi</label>
           <select id="quiz-count" disabled={busy} value={count} onChange={(e) => setCount(Number(e.target.value) as 5 | 10)}>
             <option value={5}>5 câu – thử nhanh</option><option value={10}>10 câu – ôn tập</option>
@@ -139,7 +145,7 @@ export default function QuizzesPage() {
           <button type="button" className="quizzes-primary" disabled={busy || !selectedId} onClick={handleGenerate}>
             {generating ? "Đang sinh và lưu đề…" : "✦ Tạo đề trắc nghiệm"}
           </button>
-          <p className="quizzes-hint">AI chỉ sử dụng các đoạn PDF được chọn. Mỗi lần tạo đề mới có thể phát sinh chi phí API.</p>
+          <p className="quizzes-hint">Đang dùng Ollama cục bộ: không mất phí API theo lượt, nhưng việc tạo đề có thể mất vài phút. Hãy thử 5 câu trước trên máy 12 GB RAM.</p>
         </div>
 
         <div className="quizzes-card quizzes-saved">

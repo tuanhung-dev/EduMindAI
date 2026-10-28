@@ -1,5 +1,7 @@
 # EduMind AI — Nền tảng học tập thông minh từ tài liệu PDF
 
+> **Bản sửa lỗi hội thoại HTTP 500 (28/10/2026):** Bổ sung EF migration `20261028120000_AddAiChatSessionPinFlag`, đồng bộ ModelSnapshot và cải thiện thông báo lỗi API. Đọc [`FIX_HTTP500_HOI_THOAI.md`](FIX_HTTP500_HOI_THOAI.md). Cần sao lưu MySQL và chạy `dotnet ef database update` trước khi thử lại.
+
 > **Trạng thái: bản Development / đồ án đang phát triển.** README này được cập nhật theo mã nguồn trong `Projects (2).zip` ngày 26/10/2026. Các mục **Đã có mã nguồn** không đồng nghĩa đã được xác nhận chạy thành công trên máy thật.
 
 ## 1. Giới thiệu

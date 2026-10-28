@@ -8,8 +8,8 @@
 .quizzes-card{background:#fff;padding:25px;border:1px solid #e7e9f4;border-radius:17px;box-shadow:0 7px 30px rgba(45,45,95,.04);min-width:0}
 .quizzes-card h2{font-size:18px;margin:8px 0 20px}
 .quizzes-generator label{display:block;font-size:12px;color:#4c5670;font-weight:750;margin:16px 0 8px}
-.quizzes-generator select{width:100%;padding:12px;background:white;border:1px solid #dfe2ed;border-radius:10px;color:#303c5a;font-size:13px}
-.quizzes-generator select:focus{outline:2px solid #c4baf7;outline-offset:2px}
+.quizzes-generator select,.quizzes-generator input{width:100%;box-sizing:border-box;padding:12px;background:white;border:1px solid #dfe2ed;border-radius:10px;color:#303c5a;font-size:13px}
+.quizzes-generator select:focus,.quizzes-generator input:focus{outline:2px solid #c4baf7;outline-offset:2px}
 .quizzes-primary{margin-top:22px;background:#7059d8;border:0;border-radius:10px;color:#fff;padding:13px 16px;width:100%;font-weight:750;font-size:13px;cursor:pointer}
 .quizzes-primary:hover{background:#604acb}
 .quizzes-primary:disabled,.quizzes-saved-list button:disabled{opacity:.55;cursor:not-allowed}

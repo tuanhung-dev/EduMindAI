@@ -45,6 +45,7 @@ builder.Services.Configure<BearerTokenOptions>(IdentityConstants.BearerScheme, o
     options.RefreshTokenExpiration = TimeSpan.FromHours(8);
 });
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<LearningApiAccess>();
 
 // Do not map MapIdentityApi: it exposes a second public /register endpoint
 // that would bypass the Student role registration policy.
@@ -67,11 +68,60 @@ builder.Services.AddRateLimiter(options =>
             PermitLimit = 3, Window = TimeSpan.FromMinutes(5),
             QueueLimit = 0, AutoReplenishment = true
         }));
+
+    // Expensive local AI calls are limited per authenticated account.
+    // No queue: clients receive HTTP 429 and can retry later.
+    options.AddPolicy("ai-heavy", context => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: "ai:" + (context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 6, Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0, AutoReplenishment = true
+        }));
+    options.AddPolicy("pdf-write", context => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: "pdf:" + (context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 12, Window = TimeSpan.FromMinutes(10),
+            QueueLimit = 0, AutoReplenishment = true
+        }));
 });
 
+// Production frontend origins must be explicitly listed in configuration.
+// Example: Cors__AllowedOrigins__0=https://your-frontend.example
+var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? Array.Empty<string>();
+var allowedOrigins = (builder.Environment.IsDevelopment()
+        ? configuredOrigins.Concat(new[] { "http://localhost:5173", "http://127.0.0.1:5173" })
+        : configuredOrigins.AsEnumerable())
+    .Where(origin => Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttps ||
+         (builder.Environment.IsDevelopment() && uri.Scheme == Uri.UriSchemeHttp)))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
 builder.Services.AddCors(options => options.AddPolicy("ReactApp", policy => policy
-    .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+    .WithOrigins(allowedOrigins)
     .AllowAnyHeader().AllowAnyMethod()));
+
+// Bước 25: tìm kiếm ngữ nghĩa Ollama có cache RAM; không thay đổi MySQL.
+// D4: cap cached embedding vectors (the only cache writer in this snapshot).
+// Any new IMemoryCache writers must also specify an entry Size.
+builder.Services.AddMemoryCache(options => options.SizeLimit = 96L * 1024 * 1024);
+builder.Services.AddHttpClient("RagEmbeddingClient", client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(2);
+});
+builder.Services.AddSingleton<DocumentRetrievalService>(sp => new DocumentRetrievalService(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("RagEmbeddingClient"),
+    sp.GetRequiredService<IConfiguration>(),
+    sp.GetRequiredService<ILogger<DocumentRetrievalService>>(),
+    sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>()));
+
+// D5: persistent status-based queue; uses existing Documents.Status column.
+builder.Services.AddScoped<DocumentIndexingService>();
+builder.Services.AddHostedService<DocumentIndexWorker>();
 
 builder.Services.AddHttpClient<AiTextService>(client =>
 {
@@ -86,9 +136,51 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+// API responses are private and should not be sniffed, framed or cached.
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.OnStarting(() =>
+    {
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        ctx.Response.Headers["X-Frame-Options"] = "DENY";
+        ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+        ctx.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+        if (ctx.Request.Path.StartsWithSegments("/api"))
+            ctx.Response.Headers["Cache-Control"] = "no-store";
+        return Task.CompletedTask;
+    });
+    await next();
+});
 app.UseRouting();
 app.UseCors("ReactApp");
-app.UseRateLimiter();
+// When MySQL chat tables/columns are missing, return a safe actionable error
+// instead of an opaque HTTP 500. Full details remain only in Backend logs.
+app.Use(async (ctx, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex) when (
+        ctx.Request.Path.StartsWithSegments("/api/ai") &&
+        (ex is System.Data.Common.DbException || ex is DbUpdateException))
+    {
+        var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("EduMind.ChatDatabase");
+        logger.LogError(ex, "Database failure for {Path}; trace {TraceId}",
+            ctx.Request.Path, ctx.TraceIdentifier);
+        if (ctx.Response.HasStarted) throw; // SSE headers cannot be replaced.
+        ctx.Response.Clear();
+        ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await ctx.Response.WriteAsJsonAsync(new
+        {
+            code = "AI_DATABASE_ERROR",
+            message = "Không truy cập được dữ liệu hội thoại. Hãy kiểm tra kết nối MySQL và chạy dotnet ef database update sau khi sao lưu database.",
+            traceId = ctx.TraceIdentifier
+        });
+    }
+});
+
 app.UseAuthentication();
 
 // Bước 19: áp dụng trạng thái khóa và vai trò HIỆN TẠI từ MySQL trên mọi
@@ -127,6 +219,8 @@ app.Use(async (context, next) =>
     }
     await next();
 });
+// Run endpoint rate-limiting after authentication so accounts have separate quotas.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // Existing databases need the B17 Identity migration first.
