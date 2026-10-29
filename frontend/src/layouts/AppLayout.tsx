@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { PROFILE_CHANGED_EVENT, profileInitials, readLocalProfile, type LocalProfile } from "../services/localProfileService";
+import "./AccountMenu.css";
 import { useAuth } from "../contexts/AuthContext";
 import PageErrorBoundary from "../components/PageErrorBoundary";
 import "../styles/Step29Ux.css";
@@ -8,13 +10,13 @@ import "../styles/GroupCExperience.css";
 
 // Bước 29: giữ toàn bộ đường dẫn đã có từ Bước 26–28.
 const menuItems = [
-  { path: "/app", icon: "⌂", label: "Bắt đầu", end: true },
+  { path: "/app", icon: "⌂", label: "Trang chủ", end: true },
+  { path: "/app/subjects", icon: "▧", label: "Môn học" },
   { path: "/app/documents", icon: "▤", label: "Kho tài liệu" },
   { path: "/app/ai-tutor", icon: "✦", label: "Gia sư AI" },
   { path: "/app/quizzes", icon: "◉", label: "Luyện thi AI" },
   { path: "/app/study-plan", icon: "◇", label: "Lộ trình học" },
   { path: "/app/progress", icon: "▥", label: "Kết quả luyện thi" },
-  { path: "/app/account", icon: "⚙", label: "Tài khoản" },
 ];
 
 const adminItems = [
@@ -26,6 +28,8 @@ const adminItems = [
 function getPageName(pathname: string) {
   if (pathname.includes("/attempts/") && pathname.endsWith("/take")) return "Làm bài trắc nghiệm";
   if (pathname.includes("/results/")) return "Kết quả bài thi";
+  if (pathname === "/app/account") return "Tài khoản & cài đặt";
+  if (/^\/app\/documents\/\d+$/.test(pathname)) return "Chi tiết tài liệu";
   const matched = [...adminItems, ...menuItems].find((item) => item.path === pathname);
   return matched?.label ?? "Không gian học tập";
 }
@@ -35,13 +39,18 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [localProfile, setLocalProfile] = useState<LocalProfile>(() => readLocalProfile(user?.id));
 
   // Gắn trạng thái mở với location.key để đóng menu khi điều hướng,
   // kể cả khi người dùng bấm Back/Forward trên trình duyệt.
   const [drawerKey, setDrawerKey] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const isDrawerOpen = drawerKey === location.key;
   const pageName = getPageName(location.pathname);
-  const initials = (user?.email?.split("@")[0] || "ED").slice(0, 2).toUpperCase();
+  const initials = profileInitials(localProfile.displayName, user?.email ?? "ED");
 
   const closeDrawer = (restoreFocus = false) => {
     setDrawerKey(null);
@@ -51,6 +60,38 @@ export default function AppLayout() {
   useEffect(() => {
     document.title = `${pageName} | EduMind AI`;
   }, [pageName]);
+
+  // Đồng bộ avatar với phần hồ sơ lưu cục bộ (cùng tab hoặc tab khác).
+  useEffect(() => {
+    const update = () => setLocalProfile(readLocalProfile(user?.id));
+    window.addEventListener(PROFILE_CHANGED_EVENT, update);
+    window.addEventListener("storage", update);
+    return () => {
+      window.removeEventListener(PROFILE_CHANGED_EVENT, update);
+      window.removeEventListener("storage", update);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (event.target instanceof Node && !accountRef.current?.contains(event.target)) {
+        setAccountOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAccountOpen(false);
+        avatarButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
 
   useEffect(() => {
     if (!isDrawerOpen || !window.matchMedia("(max-width: 900px)").matches) return;
@@ -99,7 +140,7 @@ export default function AppLayout() {
   }, [isDrawerOpen]);
 
   return (
-    <div className="app-layout ux29-layout edm30-shell">
+    <div className={`app-layout ux29-layout edm30-shell emw-shell ${sidebarCollapsed ? "emw-sidebar-collapsed" : ""}`}>
       <a className="ux29-skip-link" href="#edumind-main">Bỏ qua menu, đến nội dung</a>
 
       {isDrawerOpen && (
@@ -147,10 +188,11 @@ export default function AppLayout() {
                   to={item.path}
                   end={item.end}
                   onClick={() => closeDrawer()}
+                  title={item.label}
                   className={({ isActive }) => `menu-item ${isActive ? "active" : ""}`}
                 >
                   <span className="menu-icon" aria-hidden="true">{item.icon}</span>
-                  <span>{item.label}</span>
+                  <span className="emw-menu-text">{item.label}</span>
                 </NavLink>
               ))}
               <span className="ux29-menu-group-label">DÀNH CHO HỌC VIÊN</span>
@@ -162,10 +204,11 @@ export default function AppLayout() {
               to={item.path}
               end={item.end}
               onClick={() => closeDrawer()}
+              title={item.label}
               className={({ isActive }) => `menu-item ${isActive ? "active" : ""}`}
             >
               <span className="menu-icon" aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
+              <span className="emw-menu-text">{item.label}</span>
             </NavLink>
           ))}
         </nav>
@@ -183,6 +226,7 @@ export default function AppLayout() {
       <div className="main-area">
         <header className="topbar ux29-topbar">
           <div className="ux29-heading-group">
+            <button type="button" className="emw-collapse-toggle" aria-label={sidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"} title={sidebarCollapsed ? "Mở rộng menu" : "Thu gọn menu"} aria-pressed={sidebarCollapsed} onClick={() => setSidebarCollapsed(value => !value)}><span aria-hidden="true">☰</span></button>
             <button
               ref={menuButtonRef}
               type="button"
@@ -199,13 +243,50 @@ export default function AppLayout() {
               <strong>{pageName}</strong>
             </div>
           </div>
-          <div className="topbar-right ux29-user-group">
-            <span className="environment-tag">{user?.role === "Admin" ? "Quản trị viên" : "Học viên"}</span>
-            <span className="ux29-email" title={user?.email}>{user?.email}</span>
-            <button type="button" className="ux29-logout" aria-label="Đăng xuất" onClick={logout}>
-              <span aria-hidden="true">↪</span> <span>Đăng xuất</span>
-            </button>
-            <div className="avatar" aria-hidden="true">{initials}</div>
+          <div className="topbar-right ux29-user-group em-account-user-group">
+            <div className="em-account-menu" ref={accountRef} onBlur={event => {
+              if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) setAccountOpen(false);
+            }}>
+              <button
+                ref={avatarButtonRef}
+                type="button"
+                className={`avatar em-account-avatar em-account-avatar--${localProfile.avatarTheme}`}
+                aria-label="Mở cài đặt tài khoản"
+                aria-controls="edumind-account-popover"
+                aria-expanded={accountOpen}
+                aria-haspopup="true"
+                onClick={() => setAccountOpen(value => !value)}
+                title="Tài khoản và cài đặt"
+              >
+                {initials}
+              </button>
+              {accountOpen && (
+                <div id="edumind-account-popover" className="em-account-popover" aria-label="Tài khoản và cài đặt">
+                  <div className="em-account-popover-head">
+                    <span className={`em-account-popover-avatar em-account-avatar--${localProfile.avatarTheme}`}>{initials}</span>
+                    <div>
+                      <strong>{localProfile.displayName.trim() || user?.email?.split("@")[0] || "Học viên"}</strong>
+                      <small title={user?.email}>{user?.email}</small>
+                    </div>
+                  </div>
+                  <div className="em-account-popover-links">
+                    <Link to="/app/account?tab=profile" onClick={() => setAccountOpen(false)}>
+                      <span aria-hidden="true">♙</span> Hồ sơ cá nhân <span aria-hidden="true">↗</span>
+                    </Link>
+                    <Link to="/app/account?tab=security" onClick={() => setAccountOpen(false)}>
+                      <span aria-hidden="true">⚿</span> Đổi mật khẩu <span aria-hidden="true">↗</span>
+                    </Link>
+                    <Link to="/app/progress" onClick={() => setAccountOpen(false)}>
+                      <span aria-hidden="true">▥</span> Kết quả luyện thi <span aria-hidden="true">↗</span>
+                    </Link>
+                  </div>
+                  <button type="button" className="em-account-signout" onClick={() => { setAccountOpen(false); logout(); }}>
+                    <span aria-hidden="true">↪</span> Đăng xuất
+                  </button>
+                  <p>Thông tin hồ sơ cá nhân được lưu trên trình duyệt này.</p>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

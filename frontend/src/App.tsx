@@ -26,6 +26,11 @@ import AccountRecoveryPage from "./pages/AccountRecoveryPage";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import "./App.css";
+import NotFoundPage from "./pages/NotFoundPage";
+import DocumentDetailPage from "./pages/DocumentDetailPage";
+import ApiToastHost from "./components/ApiToastHost";
+import "./styles/FeedbackSystem.css";
+import "./styles/UnifiedWorkspace.css";
 
 function Private({ children }: { children: React.ReactNode }) {
   const { user, checking } = useAuth();
@@ -70,6 +75,7 @@ function AppRoutes() {
             path="documents"
             element={<DocumentsPage />}
           />
+          <Route path="documents/:id" element={<DocumentDetailPage />} />
 
           <Route
             path="ai-tutor"
@@ -94,12 +100,12 @@ function AppRoutes() {
           <Route path="admin/subjects" element={<AdminOnly><AdminSubjectsPage /></AdminOnly>} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/app" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   );
 }
 
 export default function App() {
-  return <AuthProvider><AppRoutes /></AuthProvider>;
+  return <AuthProvider><AppRoutes /><ApiToastHost /></AuthProvider>;
 }

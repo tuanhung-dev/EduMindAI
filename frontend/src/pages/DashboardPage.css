@@ -93,3 +93,9 @@
 @media (max-width: 1200px) { .d27-stats { grid-template-columns: repeat(2, minmax(0,1fr)); } .d27-columns { grid-template-columns: 1fr; } .d27-bottom { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 780px) { .d27-hero { padding: 24px; min-height: 0; } .d27-stats,.d27-bottom,.d27-documents,.d27-quick-grid { grid-template-columns: 1fr; } .d27-panel { padding: 18px; } .d27-toolbar { align-items: flex-start; } .d27-panel-head { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .d27-bar,.d27-quick-card { transition: none; } }
+
+
+
+
+
+

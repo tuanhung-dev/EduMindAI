@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EduMind.Api.Controllers;
 
@@ -28,12 +29,15 @@ public sealed class AiTutorController : ControllerBase
     private readonly AiTextService _ai;
     private readonly LearningApiAccess _access;
     private readonly DocumentRetrievalService _retrieval;
+    private readonly ILogger<AiTutorController> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public AiTutorController(EduMindDbContext db, LearningApiAccess access,
-        AiTextService aiTextService, DocumentRetrievalService retrieval)
+        AiTextService aiTextService, DocumentRetrievalService retrieval,
+        ILogger<AiTutorController> logger)
     {
         _db = db; _access = access; _ai = aiTextService; _retrieval = retrieval;
+        _logger = logger;
     }
 
     private sealed record DocInfo(int Id, string Name, bool Word, string Alias);
@@ -47,19 +51,49 @@ public sealed class AiTutorController : ControllerBase
     [EnableRateLimiting("ai-heavy")]
     public async Task<IActionResult> Ask([FromBody] AskDocumentRequest request, CancellationToken ct)
     {
-        var (ctx, problem) = await PrepareAsync(request, ct);
-        if (problem != null) return problem;
-        var data = ctx!;
-        string answer;
-        if (data.Sources.Length == 0) answer = NoEvidence;
-        else
+        try
         {
-            try { answer = await _ai.GenerateAsync(data.Instructions, data.Input, 850, ct); }
-            catch (AiGenerationException ex) { return StatusCode(ex.StatusCode, new { message = ex.Message }); }
-            answer = VerifyAnswer(answer, data);
+            var (ctx, problem) = await PrepareAsync(request, ct);
+            if (problem != null) return problem;
+            var data = ctx!;
+
+            string answer = data.Sources.Length == 0
+                ? NoEvidence
+                : VerifyAnswer(await _ai.GenerateAsync(data.Instructions, data.Input, 850, ct), data);
+
+            int chatId = await SaveConversationAsync(data, answer, ct);
+            return Ok(ResponseObject(data, answer, chatId));
         }
-        int chatId = await SaveConversationAsync(data, answer, ct);
-        return Ok(ResponseObject(data, answer, chatId));
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw; // Client đã ngắt kết nối: không gửi phản hồi khác.
+        }
+        catch (AiGenerationException ex)
+        {
+            _logger.LogWarning(ex, "AI ask failed. DocumentId={DocumentId} TraceId={TraceId}",
+                request.DocumentId, HttpContext.TraceIdentifier);
+            return StatusCode(ex.StatusCode, new { message = ex.Message, traceId = HttpContext.TraceIdentifier });
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "AI chat database error. DocumentId={DocumentId} TraceId={TraceId}",
+                request.DocumentId, HttpContext.TraceIdentifier);
+            return StatusCode(500, new
+            {
+                message = "Không lưu được hội thoại vào MySQL. Hãy kiểm tra migration và log backend.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AI ask unexpected error. DocumentId={DocumentId} TraceId={TraceId}",
+                request.DocumentId, HttpContext.TraceIdentifier);
+            return StatusCode(500, new
+            {
+                message = "Gia sư AI gặp lỗi máy chủ. Hãy kiểm tra log backend.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
     }
 
     // Fetch + SSE works with Authorization: Bearer (EventSource cannot send that header).
@@ -68,42 +102,124 @@ public sealed class AiTutorController : ControllerBase
     [EnableRateLimiting("ai-heavy")]
     public async Task<IActionResult> Stream([FromBody] AskDocumentRequest request, CancellationToken ct)
     {
-        var (ctx, problem) = await PrepareAsync(request, ct);
-        if (problem != null) return problem;
-        var data = ctx!;
+        Prepared data;
+        // Trước khi mở SSE có thể trả JSON với mã HTTP phù hợp.
+        try
+        {
+            var (ctx, problem) = await PrepareAsync(request, ct);
+            if (problem != null) return problem;
+            data = ctx!;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AI stream preparation failed. DocumentId={DocumentId} TraceId={TraceId}",
+                request.DocumentId, HttpContext.TraceIdentifier);
+            return StatusCode(500, new
+            {
+                message = "Không tải được dữ liệu hội thoại hoặc tài liệu từ MySQL. Hãy kiểm tra log backend.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
         if (data.Sources.Length > 0 && !_ai.SupportsStreaming)
-            return Conflict(new { message = "Streaming hiện hỗ trợ AI:Provider=Ollama. Hãy chuyển Ollama hoặc dùng API ask thường." });
+            return Conflict(new { message = "Streaming chỉ hỗ trợ AI:Provider=Ollama. Hãy tắt trả lời từng phần nếu đang dùng OpenAI." });
+
         Response.StatusCode = 200;
         Response.ContentType = "text/event-stream; charset=utf-8";
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
+
+        string phase = "generation";
         try
         {
             var full = new StringBuilder();
-            if (data.Sources.Length == 0) full.Append(NoEvidence);
+            if (data.Sources.Length == 0)
+            {
+                full.Append(NoEvidence);
+            }
             else
             {
-                await foreach (var piece in _ai.StreamOllamaAsync(data.Instructions, data.Input, 850, ct))
+                // Nếu stream hỏng trước mẩu đầu tiên, thử API không-stream của cùng model Ollama.
+                // Không làm như vậy khi đã gửi một phần nội dung để tránh trả lời trùng.
+                try
                 {
-                    full.Append(piece);
-                    if (full.Length > 50_000) throw new InvalidOperationException("AI output too long.");
-                    await SseAsync("delta", new { text = piece }, ct);
+                    await foreach (var piece in _ai.StreamOllamaAsync(data.Instructions, data.Input, 850, ct))
+                    {
+                        full.Append(piece);
+                        if (full.Length > 50_000)
+                            throw new InvalidOperationException("AI output too long.");
+                        await SseAsync("delta", new { text = piece }, ct);
+                    }
+                }
+                catch (Exception ex) when (
+                    !ct.IsCancellationRequested && full.Length == 0 &&
+                    (ex is AiGenerationException or HttpRequestException or JsonException))
+                {
+                    _logger.LogWarning(ex,
+                        "Ollama stream stopped without content; falling back to non-streaming. DocumentId={DocumentId} TraceId={TraceId}",
+                        data.DocumentId, HttpContext.TraceIdentifier);
+                    string fallback = await _ai.GenerateAsync(data.Instructions, data.Input, 850, ct);
+                    if (fallback.Length > 50_000)
+                        throw new InvalidOperationException("AI output too long.");
+                    full.Append(fallback);
+                    await SseAsync("delta", new { text = fallback }, ct);
                 }
             }
+
             ct.ThrowIfCancellationRequested();
+            phase = "validation";
             var final = VerifyAnswer(full.ToString(), data);
+            phase = "database";
             int chatId = await SaveConversationAsync(data, final, ct);
+            phase = "response";
             await SseAsync("done", ResponseObject(data, final, chatId), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // User pressed Stop; no history record for a truncated response.
+            // Người dùng nhấn Dừng: không lưu câu trả lời dở dang.
         }
-        catch (Exception ex) when (ex is AiGenerationException or HttpRequestException or JsonException or InvalidOperationException)
+        catch (Exception ex)
         {
-            await SseAsync("error", new { message = "Không tạo được câu trả lời đầy đủ. Hãy thử lại." }, CancellationToken.None);
+            _logger.LogError(ex,
+                "AI stream failed. Phase={Phase} DocumentId={DocumentId} TraceId={TraceId}",
+                phase, data.DocumentId, HttpContext.TraceIdentifier);
+
+            string message = phase switch
+            {
+                "database" => "AI đã tạo câu trả lời nhưng không lưu được lịch sử vào MySQL. Kiểm tra migration và log backend.",
+                "response" => "Đã lưu câu trả lời, nhưng kết nối đến trình duyệt bị gián đoạn. Hãy tải lại lịch sử hội thoại.",
+                _ => ex switch
+                {
+                    AiGenerationException aiError => aiError.Message,
+                    HttpRequestException => "Không kết nối được với Ollama. Kiểm tra Ollama đang chạy ở 127.0.0.1:11434.",
+                    JsonException => "Ollama trả về dữ liệu không đúng định dạng. Hãy kiểm tra log backend.",
+                    OperationCanceledException => "Ollama phản hồi quá chậm hoặc hết thời gian chờ.",
+                    _ => "Gia sư AI không hoàn tất câu trả lời. Kiểm tra log backend."
+                }
+            };
+            await TrySendStreamErrorAsync(message, ct);
         }
         return new EmptyResult();
+    }
+
+    // SSE có thể đã bị đóng bởi trình duyệt; không để lỗi gửi thông báo che lỗi gốc.
+    private async Task TrySendStreamErrorAsync(string message, CancellationToken requestCt)
+    {
+        if (requestCt.IsCancellationRequested) return;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await SseAsync("error", new { message, traceId = HttpContext.TraceIdentifier }, timeout.Token);
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "Cannot send AI stream error. TraceId={TraceId}",
+                HttpContext.TraceIdentifier);
+        }
     }
 
     private async Task SseAsync(string kind, object payload, CancellationToken ct)

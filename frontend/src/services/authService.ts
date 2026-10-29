@@ -42,13 +42,34 @@ export async function authenticatedFetch(url: string, init?: RequestInit): Promi
   const headers = new Headers(init?.headers);
   const token = accessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(url.startsWith("/api/") ? `${API_URL}${url}` : url, {
-    ...init,
-    headers,
-  });
-  if (response.status === 401) {
+  let response: Response;
+  try {
+    response = await fetch(url.startsWith("/api/") ? `${API_URL}${url}` : url, {
+      ...init,
+      headers,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    if (error instanceof TypeError) {
+      window.dispatchEvent(new CustomEvent("edumind-api-feedback", { detail: {
+        status: 0, message: "Không thể kết nối tới máy chủ. Kiểm tra mạng, địa chỉ API hoặc CORS.",
+      } }));
+      throw new Error(`Không kết nối được API tại ${API_URL}. Kiểm tra máy chủ và CORS.`, { cause: error });
+    }
+    throw error;
+  }
+  if (response.status === 401 && token) {
     clearAccessToken();
     window.dispatchEvent(new Event("edumind-auth-expired"));
+  } else if (response.status === 403 || response.status === 429 || response.status >= 500) {
+    const message = response.status === 403
+      ? "Bạn không có quyền truy cập chức năng này hoặc máy chủ chưa bật chức năng."
+      : response.status === 429
+        ? "Bạn thao tác quá nhiều lần. Hãy thử lại sau."
+        : "Máy chủ đang gặp sự cố. Hãy thử lại sau.";
+    window.dispatchEvent(new CustomEvent("edumind-api-feedback", {
+      detail: { status: response.status, message },
+    }));
   }
   return response;
 }

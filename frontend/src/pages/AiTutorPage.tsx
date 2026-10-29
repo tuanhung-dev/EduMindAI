@@ -8,8 +8,11 @@ import {
 } from "../services/aiTutorService";
 import { getChats, getChat, deleteChat, renameChat, pinChat, type AiChatSession, type AiChatMessage } from "../services/aiChatService";
 import DocumentSidePanel from "../components/DocumentSidePanel";
+import TutorRichText from "../components/TutorRichText";
 import "./AiTutorPage.css";
 import "./RagGroupA.css";
+import "./AiTutorChatGPT.css";
+import "./AiTutorUnified.css";
 
 const prompts = [
   { icon: "✧", label: "Tóm lược các kiến thức chính", question: "Tài liệu này đề cập đến những nội dung chính nào?" },
@@ -63,14 +66,19 @@ export default function AiTutorPage() {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [chatSessions, setChatSessions] = useState<AiChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
-  const [loadingChats, setLoadingChats] = useState(true);
+  const [loadingChats, setLoadingChats] = useState(false);
   const [chatSearch, setChatSearch] = useState("");
   const [chatGroup, setChatGroup] = useState<"all" | "pinned">("all");
+ const [historyOpen, setHistoryOpen] = useState(() =>
+  typeof window === "undefined" ||
+  !window.matchMedia("(max-width: 1100px)").matches
+);
+  const [documentPanelOpen, setDocumentPanelOpen] = useState(false);
+  const [sourceExpanded, setSourceExpanded] = useState<number | null>(null);
   const [selectedSource, setSelectedSource] = useState<AiAnswer["sources"][number] | null>(null);
   const [renamingChatId, setRenamingChatId] = useState<number | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const searchTriggerRef = useRef<HTMLButtonElement>(null);
   const sourceTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [summary, setSummary] = useState<AiSummary | null>(null);
   const [summaryLevel, setSummaryLevel] = useState<"short" | "detailed">("short");
@@ -83,16 +91,26 @@ export default function AiTutorPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const nextTurnRef = useRef(1);
+  const documentPanelRef = useRef<HTMLElement>(null);
+  const nextTurnRef = useRef(-1);
 
+  // Tải danh sách tài liệu khi mở Gia sư AI.
+  // Nếu bỏ useEffect này, loadingDocs sẽ luôn là true và form chat bị khóa.
   useEffect(() => {
-    let live = true;
+    let active = true;
     getDocuments()
-      .then(items => { if (live) setDocuments(items); })
-      .catch(err => { if (live) setError(friendlyError(err, "Không tải được kho tài liệu.")); })
-      .finally(() => { if (live) setLoadingDocs(false); });
-    return () => { live = false; };
+      .then(items => {
+        if (active) setDocuments(items);
+      })
+      .catch(err => {
+        if (active) setError(friendlyError(err, "Không tải được kho tài liệu."));
+      })
+      .finally(() => {
+        if (active) setLoadingDocs(false);
+      });
+    return () => { active = false; };
   }, []);
 
   const requested = parseDocumentId(searchParams.get("documentId"));
@@ -128,7 +146,7 @@ export default function AiTutorPage() {
   }, [chatSessions, chatGroup, chatSearch]);
   const activeSummary = summary?.documentId === documentId ? summary : null;
 
-  // Lịch sử tóm tắt được lưu trên Backend; phần hội thoại hỏi đáp chỉ nằm trong tab hiện tại.
+  // Lịch sử tóm tắt và hội thoại được lưu ở Backend theo tài liệu.
   useEffect(() => {
     if (!documentId) return;
     let live = true;
@@ -197,6 +215,7 @@ export default function AiTutorPage() {
       setActiveChatId(id);
       setTurns(toChatTurns(detail.messages, detail.documentId));
       setMode("ask");
+      if (window.matchMedia("(max-width: 1100px)").matches) setHistoryOpen(false);
     } catch (err) { setError(friendlyError(err, "Không mở được lịch sử hội thoại.")); }
     finally { setLoadingChats(false); }
   }
@@ -215,13 +234,15 @@ export default function AiTutorPage() {
 
   useEffect(() => {
     if (mode === "ask" && turns.length > 0) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      const el = chatScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
     }
   }, [turns, asking, mode]);
 
   function chooseDocument(id: number) {
     if (busy) return;
     setSearchParams({ documentId: String(id) });
+    setDocumentPanelOpen(false);
     setSelectedSource(null); setChatSearch(""); setRenamingChatId(null);
     setTurns([]);
     setActiveChatId(null); setChatSessions([]); setLoadingChats(true);
@@ -256,10 +277,11 @@ export default function AiTutorPage() {
   async function sendPrompt(value: string) {
     const prompt = value.trim();
     if (!documentId || busy) return;
+    if (!ready) { setError("Tài liệu chưa sẵn sàng. Hãy xử lý tài liệu trước khi hỏi."); setDocumentPanelOpen(true); return; }
     if (prompt.length < 3 || prompt.length > 500) {
       setError("Câu hỏi cần dài từ 3 đến 500 ký tự."); return;
     }
-    const turnId = nextTurnRef.current++;
+    const turnId = nextTurnRef.current--;
     const ids = [documentId, ...additionalDocuments.filter(id => id !== documentId)];
     const controller = new AbortController();
     stopStreamRef.current = controller;
@@ -285,6 +307,47 @@ export default function AiTutorPage() {
     }
   }
 
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 176)}px`;
+  }, [question, mode]);
+
+  useEffect(() => {
+    if (!historyOpen || documentPanelOpen) return;
+    function onEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setHistoryOpen(false);
+    }
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [documentPanelOpen, historyOpen]);
+
+  useEffect(() => {
+    if (!documentPanelOpen) return;
+    const panel = documentPanelRef.current;
+    const restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panel?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus();
+    function handlePanelKeys(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDocumentPanelOpen(false);
+      }
+      if (event.key !== "Tab" || !panel) return;
+      const items = Array.from(panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+      )).filter(item => item.getClientRects().length > 0);
+      if (!items.length) return;
+      if (event.shiftKey && document.activeElement === items[0]) {
+        event.preventDefault(); items[items.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === items[items.length - 1]) {
+        event.preventDefault(); items[0].focus();
+      }
+    }
+    document.addEventListener("keydown", handlePanelKeys);
+    return () => { document.removeEventListener("keydown", handlePanelKeys); restoreFocus?.focus(); };
+  }, [documentPanelOpen]);
+
   function handleAsk(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void sendPrompt(question);
@@ -303,7 +366,9 @@ export default function AiTutorPage() {
     const onShortcut = (event: globalThis.KeyboardEvent) => {
       if (event.key.toLowerCase() === "k" && (event.ctrlKey || event.metaKey)) {
         // Ctrl+K searches the currently selected document's conversation history.
-        event.preventDefault(); searchRef.current?.focus();
+        event.preventDefault();
+        setHistoryOpen(true);
+        window.requestAnimationFrame(() => searchRef.current?.focus());
       }
     };
     document.addEventListener("keydown", onShortcut);
@@ -312,7 +377,7 @@ export default function AiTutorPage() {
 
   function newConversation() {
     if (busy) return;
-    setTurns([]); setActiveChatId(null); setQuestion(""); setError(""); setNotice(""); setSelectedSource(null);
+    setTurns([]); setActiveChatId(null); setQuestion(""); setError(""); setNotice(""); setSelectedSource(null); setDocumentPanelOpen(false); setSourceExpanded(null);
     composerRef.current?.focus();
   }
 
@@ -371,166 +436,182 @@ export default function AiTutorPage() {
   }
 
   return (
-    <section className={`em30-tutor ${selectedSource ? "emc-tutor-with-source" : ""}`} aria-label="Không gian Gia sư AI">
-      <aside className="em30-docrail" aria-label="Tài liệu học tập">
-        <div className="em30-rail-heading">
-          <span className="em30-kicker">NGUỒN KIẾN THỨC</span>
-          <h2>Tài liệu của bạn</h2>
-          <p>Chọn PDF hoặc Word để Gia sư AI tham khảo khi trả lời.</p>
+    <div className="emai-page">
+      <header className="emai-page-header">
+        <div className="emai-page-heading">
+          <span className="emai-eyebrow">EDUMIND AI · TRỢ LÝ HỌC TẬP</span>
+          <h1>Gia sư AI</h1>
+          <p>
+            Hỏi đáp như một cuộc trò chuyện, dựa trên tài liệu Word/PDF
+            và kiểm tra nguồn ngay trong EduMindAI.
+          </p>
         </div>
-        {loadingDocs ? <p className="em30-muted" role="status">Đang tải tài liệu…</p>
-        : documents.length === 0 ? <div className="em30-empty-doc">
-          <span aria-hidden="true">▤</span><strong>Chưa có tài liệu</strong>
-          <p>Thêm PDF hoặc Word (.docx) vào thư viện để bắt đầu học cùng AI.</p>
-          <Link to="/app/documents" className="em30-secondary-link">Tải tài liệu lên ↗</Link>
-        </div> : <>
-          <label htmlFor="em30-document" className="em30-label">Tài liệu đang sử dụng</label>
-          <select id="em30-document" className="em30-select" disabled={busy} value={documentId ?? ""}
-            onChange={e => chooseDocument(Number(e.target.value))}>
-            {documents.map(doc => <option key={doc.id} value={doc.id}>{doc.originalFileName}</option>)}
-          </select>
-          {mode === "ask" && documents.length > 1 && <fieldset className="emai-multidoc" disabled={busy}>
-            <legend>Hỏi thêm từ tài liệu khác (tối đa 5)</legend>
-            {documents.filter(doc => doc.id !== documentId).map(doc =>
-              <label key={doc.id}><input type="checkbox" checked={additionalDocuments.includes(doc.id)}
-                disabled={busy || (!additionalDocuments.includes(doc.id) && additionalDocuments.length >= 4) || doc.status.toLowerCase() !== "ready"}
-                onChange={event => setAdditionalDocuments(old => event.target.checked
-                  ? [...old, doc.id] : old.filter(id => id !== doc.id))} />
-                <span title={doc.originalFileName}>{doc.originalFileName}</span>
-              </label>)}
-          </fieldset>}
-          {selectedDocument && <div className="em30-file">
-            <div className="em30-pdf-icon" aria-hidden="true">{isWord ? "DOCX" : "PDF"}</div>
-            <div className="em30-file-info"><strong title={selectedDocument.originalFileName}>{selectedDocument.originalFileName}</strong>
-              <small>{(selectedDocument.sizeBytes / 1024).toFixed(1)} KB</small></div>
-          </div>}
-          <div className={`em30-index-state ${ready ? "em30-is-ready" : ""}`}>
-            <span className="em30-status-dot" aria-hidden="true" />
-            <span>{ready ? "Đã sẵn sàng để hỏi" : "Cần xử lý tài liệu"}</span>
+        <div className="emai-page-actions">
+          <span className={`emai-ready-chip ${ready ? "is-ready" : ""}`}>
+            <span aria-hidden="true">●</span>
+            {ready ? "Sẵn sàng để hỏi" : "Cần chọn / xử lý tài liệu"}
+          </span>
+          <Link className="emai-docs-link" to="/app/documents">
+            ▤ Kho tài liệu ↗
+          </Link>
+        </div>
+      </header>
+
+      <section className={`em30-tutor emgpt-shell ${historyOpen ? "emgpt-history-open" : "emgpt-history-closed"} ${selectedSource ? "emc-tutor-with-source" : ""}`}
+      aria-label="Không gian Gia sư AI">
+      {historyOpen && <button type="button" className="emgpt-history-backdrop" onClick={() => setHistoryOpen(false)} aria-label="Đóng lịch sử hội thoại" />}
+      <aside className="emgpt-sidebar" aria-label="Lịch sử hội thoại">
+        <div className="emgpt-sidebar-head">
+          <div className="emai-history-title">
+            <span className="emai-history-icon" aria-hidden="true">☷</span>
+            <div>
+              <strong>Lịch sử hội thoại</strong>
+              <small>Theo tài liệu đang chọn</small>
+            </div>
           </div>
-          <button type="button" className="em30-index-btn" onClick={handleIndex} disabled={busy || !documentId}>
-            {indexing ? "Đang xử lý tài liệu…" : ready ? "↻ Xử lý lại tài liệu" : "✦ Xử lý tài liệu"}
-          </button>
-          {documentId && <a className="em30-file-link" href={getDocumentFileUrl(documentId)} target="_blank" rel="noreferrer">{isWord ? "↗ Tải Word gốc" : "↗ Xem PDF gốc"}</a>}
-          <p className="em30-muted em30-source-hint">Chỉ mục tài liệu giúp AI tìm các đoạn liên quan. Xử lý lại sẽ thay thế những đoạn đã lưu trước đó.</p>
-        </>}
-        <div className="em30-chat-history-rail emc-history">
-          <div className="em30-section-title"><h3>◷ Lịch sử trò chuyện</h3><span>{chatSessions.length}</span></div>
-          <label htmlFor="emc-chat-search" className="em30-sr-only">Tìm theo tên hội thoại</label>
-          <div className="emc-search-row">
-            <input ref={searchRef} id="emc-chat-search" type="search" value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="Tìm hội thoại…" />
-            <button ref={searchTriggerRef} type="button" title="Tìm hội thoại (Ctrl+K)" aria-label="Đặt con trỏ vào ô tìm hội thoại" onClick={() => searchRef.current?.focus()}>⌕</button>
+          <button type="button" className="emgpt-icon-btn emgpt-close-sidebar" aria-label="Thu gọn lịch sử" title="Thu gọn lịch sử" onClick={() => setHistoryOpen(false)}>×</button>
+        </div>
+        <button type="button" className="emgpt-new-chat" onClick={() => { newConversation(); if (window.matchMedia("(max-width: 1100px)").matches) setHistoryOpen(false); }} disabled={busy}>
+          <span aria-hidden="true">✎</span> Cuộc trò chuyện mới <span aria-hidden="true">＋</span>
+        </button>
+        <button type="button" className="emgpt-menu-action" onClick={() => {
+          setDocumentPanelOpen(true);
+          if (window.matchMedia("(max-width: 1100px)").matches) setHistoryOpen(false);
+        }}>
+          <span aria-hidden="true">▤</span> Đổi tài liệu tham khảo <span className="emgpt-menu-count">{documents.length}</span>
+        </button>
+        <div className="emgpt-history-zone">
+          <div className="emgpt-history-caption"><span>ĐOẠN CHAT</span><small>{chatSessions.length}</small></div>
+          <label className="em30-sr-only" htmlFor="emgpt-search">Tìm kiếm hội thoại trong tài liệu</label>
+          <div className="emgpt-search">
+            <span aria-hidden="true">⌕</span>
+            <input ref={searchRef} id="emgpt-search" type="search" value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="Tìm trong lịch sử…" />
+            <kbd>Ctrl K</kbd>
           </div>
-          <div className="emc-history-filters" role="group" aria-label="Lọc lịch sử">
+          <div className="emgpt-history-filters" role="group" aria-label="Lọc lịch sử">
             <button type="button" aria-pressed={chatGroup === "all"} className={chatGroup === "all" ? "selected" : ""} onClick={() => setChatGroup("all")}>Tất cả</button>
             <button type="button" aria-pressed={chatGroup === "pinned"} className={chatGroup === "pinned" ? "selected" : ""} onClick={() => setChatGroup("pinned")}>Đã ghim</button>
           </div>
-          {loadingChats ? <p className="em30-muted" role="status">Đang tải hội thoại…</p>
-          : chatSessions.length === 0 ? <p className="em30-muted">Chưa có hội thoại. Hãy đặt câu hỏi đầu tiên.</p>
-          : historyGroups.length === 0 ? <p className="em30-muted">Không tìm thấy hội thoại phù hợp.</p>
-          : <div className="em30-chat-history-list emc-history-list">{historyGroups.map(([groupName, chats]) => <section key={groupName} aria-label={groupName}>
-            <h4 className="emc-history-group">{groupName}</h4>
-            {chats.map(chat => <div className={`em30-chat-history-item emc-history-item ${activeChatId === chat.id ? "selected" : ""}`} key={chat.id}>
-              {renamingChatId === chat.id ? <form className="emc-rename" onSubmit={e => { e.preventDefault(); void saveChatTitle(chat.id); }}>
-                <label className="em30-sr-only" htmlFor={`emc-name-${chat.id}`}>Tên hội thoại</label>
-                <input id={`emc-name-${chat.id}`} maxLength={180} autoFocus value={renamingTitle} onChange={e => setRenamingTitle(e.target.value)} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setRenamingChatId(null); } }} />
-                <button type="submit" disabled={busy} aria-label="Lưu tên hội thoại">✓</button>
-                <button type="button" onClick={() => setRenamingChatId(null)} aria-label="Hủy đổi tên">×</button>
-              </form> : <>
-                <button type="button" className="emc-history-open" disabled={busy || loadingChats} onClick={() => void openConversation(chat.id)} aria-current={activeChatId === chat.id ? "true" : undefined} title={chat.title}>{chat.isPinned ? "📌 " : ""}{chat.title}</button>
-                <div className="emc-history-actions">
-                  <button type="button" disabled={busy || loadingChats} aria-label={`Đổi tên ${chat.title}`} title="Đổi tên" onClick={() => { setRenamingChatId(chat.id); setRenamingTitle(chat.title); }}>✎</button>
-                  <button type="button" disabled={busy || loadingChats} aria-label={chat.isPinned ? `Bỏ ghim ${chat.title}` : `Ghim ${chat.title}`} title={chat.isPinned ? "Bỏ ghim" : "Ghim"} onClick={() => void toggleChatPin(chat)}>{chat.isPinned ? "◇" : "♧"}</button>
-                  <button type="button" disabled={busy || loadingChats} aria-label={`Xóa hội thoại ${chat.title}`} title="Xóa" onClick={() => void removeConversation(chat.id)}>×</button>
-                </div>
-              </>}
-            </div>)}
-          </section>)}</div>}
+          <div className="emgpt-history-scroll">
+            {loadingChats ? <p className="emgpt-side-empty" role="status">Đang tải hội thoại…</p>
+            : chatSessions.length === 0 ? <p className="emgpt-side-empty">Hội thoại của tài liệu này sẽ xuất hiện ở đây.</p>
+            : historyGroups.length === 0 ? <p className="emgpt-side-empty">Không tìm thấy hội thoại.</p>
+            : historyGroups.map(([groupName, chats]) => <section key={groupName} aria-label={groupName} className="emgpt-history-group">
+              <h3>{groupName}</h3>
+              {chats.map(chat => <div className={`emgpt-history-item ${activeChatId === chat.id ? "selected" : ""}`} key={chat.id}>
+                {renamingChatId === chat.id ? <form className="emgpt-rename" onSubmit={e => { e.preventDefault(); void saveChatTitle(chat.id); }}>
+                  <label className="em30-sr-only" htmlFor={`emgpt-name-${chat.id}`}>Tên hội thoại</label>
+                  <input id={`emgpt-name-${chat.id}`} autoFocus maxLength={180} value={renamingTitle} onChange={e => setRenamingTitle(e.target.value)} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setRenamingChatId(null); } }} />
+                  <button type="submit" disabled={busy} aria-label="Lưu tên hội thoại">✓</button>
+                  <button type="button" onClick={() => setRenamingChatId(null)} aria-label="Hủy đổi tên">×</button>
+                </form> : <>
+                  <button type="button" className="emgpt-history-entry-button" disabled={busy || loadingChats} onClick={() => void openConversation(chat.id)} aria-current={activeChatId === chat.id ? "true" : undefined} title={chat.title}>
+                    <span className="emgpt-history-icon" aria-hidden="true">{chat.isPinned ? "♧" : "▤"}</span><span>{chat.title}</span>
+                  </button>
+                  <div className="emgpt-history-menu">
+                    <button type="button" disabled={busy || loadingChats} title="Đổi tên" aria-label={`Đổi tên ${chat.title}`} onClick={() => { setRenamingChatId(chat.id); setRenamingTitle(chat.title); }}>✎</button>
+                    <button type="button" disabled={busy || loadingChats} title={chat.isPinned ? "Bỏ ghim" : "Ghim"} aria-label={chat.isPinned ? `Bỏ ghim ${chat.title}` : `Ghim ${chat.title}`} onClick={() => void toggleChatPin(chat)}>{chat.isPinned ? "◇" : "♧"}</button>
+                    <button type="button" disabled={busy || loadingChats} title="Xóa" aria-label={`Xóa ${chat.title}`} onClick={() => void removeConversation(chat.id)}>×</button>
+                  </div>
+                </>}
+              </div>)}
+            </section>)}
+          </div>
         </div>
-        <div className="em30-rail-bottom">
-          <span className="em30-rail-bottom-icon" aria-hidden="true">✦</span>
-          <div><strong>AI học từ tài liệu</strong><small>Câu trả lời có thể sai. Hãy đối chiếu các trang nguồn.</small></div>
-        </div>
+        <div className="emgpt-sidebar-foot"><span className="emgpt-avatar" aria-hidden="true">AI</span><div><strong>Gia sư theo tài liệu</strong><small>Lịch sử được lưu trên tài khoản</small></div></div>
       </aside>
 
-      <div className="em30-workspace">
-        <header className="em30-chat-header">
-          <div className="em30-heading">
-            <div className="em30-heading-icon" aria-hidden="true">✦</div>
-            <div><span>EDUMIND ASSISTANT</span><h1>Gia sư AI</h1></div>
+      <main className="emgpt-main" aria-label="Trò chuyện với Gia sư AI">
+        <header className="emgpt-header">
+          <div className="emgpt-header-left">
+            <button type="button" className="emgpt-icon-btn" aria-label={historyOpen ? "Đóng lịch sử" : "Mở lịch sử"} aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)} title="Bật/tắt lịch sử">☰</button>
+            <div className="emgpt-header-heading">
+              <h2>Trò chuyện với AI</h2>
+              <span className="emgpt-header-version">Hỏi đáp dựa trên tài liệu · có dẫn nguồn</span>
+            </div>
           </div>
-          <div className="em30-header-actions">
-            <span className="em30-model-chip"><span aria-hidden="true" /> Trả lời từ tài liệu</span>
-            {mode === "ask" && <button type="button" className="em30-ghost-btn" onClick={newConversation} disabled={busy || loadingChats || (visibleTurns.length === 0 && !activeChatId)} title="Bắt đầu hội thoại mới (không xóa lịch sử trước đó)">＋ Cuộc trò chuyện mới</button>}
+          <div className="emgpt-header-right">
+            <button type="button" className="emgpt-document-trigger" onClick={() => setDocumentPanelOpen(true)} title="Chọn hoặc xử lý tài liệu">
+              <span aria-hidden="true">▤</span><span className="emgpt-document-label">{selectedDocument?.originalFileName ?? "Chọn tài liệu"}</span>
+              <span className={`emgpt-mini-dot ${ready ? "ready" : ""}`} aria-hidden="true" />
+              <span aria-hidden="true">⌄</span>
+            </button>
+            <button type="button" className="emgpt-icon-btn emgpt-header-new" onClick={newConversation} disabled={busy} title="Cuộc trò chuyện mới" aria-label="Cuộc trò chuyện mới">✎</button>
           </div>
         </header>
-        <div className="em30-tabbar" role="group" aria-label="Chọn công cụ Gia sư AI">
-          <button className={mode === "ask" ? "em30-tab active" : "em30-tab"} type="button" disabled={busy} onClick={() => switchMode("ask")}>✧ Hỏi đáp tài liệu</button>
-          <button className={mode === "summary" ? "em30-tab active" : "em30-tab"} type="button" disabled={busy} onClick={() => switchMode("summary")}>▤ Tóm tắt PDF</button>
+        <div className="emgpt-mode-row" role="group" aria-label="Chọn chế độ làm việc">
+          <button type="button" className={mode === "ask" ? "selected" : ""} aria-pressed={mode === "ask"} disabled={busy} onClick={() => switchMode("ask")}>✧ Trò chuyện</button>
+          <button type="button" className={mode === "summary" ? "selected" : ""} aria-pressed={mode === "summary"} disabled={busy} onClick={() => switchMode("summary")}>▤ Tóm tắt tài liệu</button>
+          <span className="emgpt-mode-spacer" />
+          <span className="emgpt-mode-help">{ready ? "● Tài liệu đã sẵn sàng" : "○ Chưa sẵn sàng"}</span>
         </div>
-        {error && <div className="em30-alert em30-alert-error" role="alert">{error}</div>}
-        {notice && <div className="em30-alert em30-alert-ok" role="status">{notice}</div>}
-
+        {error && <div className="emgpt-inline-alert is-error" role="alert"><span>{error}</span><button type="button" aria-label="Đóng thông báo lỗi" onClick={() => setError("")}>×</button></div>}
+        {notice && <div className="emgpt-inline-alert is-notice" role="status"><span>{notice}</span><button type="button" aria-label="Đóng thông báo" onClick={() => setNotice("")}>×</button></div>}
         {mode === "ask" ? <>
-          <div className="em30-chat-scroll" role="log" aria-label="Các câu hỏi và câu trả lời được lưu" aria-live="polite">
-            {visibleTurns.length === 0 && <div className="em30-welcome">
-              <div className="em30-welcome-mark" aria-hidden="true">✦</div>
-              <span className="em30-kicker">KHÔNG GIAN HỌC TẬP CỦA BẠN</span>
-              <h2>Hôm nay bạn muốn tìm hiểu điều gì?</h2>
-              <p>Hỏi bất kỳ điều gì về tài liệu đã chọn. Mình sẽ giúp bạn tìm ý chính, giải thích khái niệm và chỉ ra nguồn tài liệu liên quan.</p>
-              <div className="em30-suggestions">
-                {prompts.map(item => <button key={item.question} type="button" disabled={busy || !documentId}
-                  onClick={() => { setQuestion(item.question); composerRef.current?.focus(); }}>
-                  <span className="em30-suggestion-icon" aria-hidden="true">{item.icon}</span>
-                  <span>{item.label}</span><span className="em30-suggestion-arrow" aria-hidden="true">↗</span>
+          <div ref={chatScrollRef} className="emgpt-conversation-scroll" role="log" aria-label="Lịch sử câu hỏi và câu trả lời">
+            {visibleTurns.length === 0 && <div className="emgpt-welcome">
+              <div className="emgpt-welcome-orb" aria-hidden="true">✦</div>
+              <p className="emgpt-overline">BẠN ĐANG HỌC CÙNG EDUMIND AI</p>
+              <h2>Bạn muốn tìm hiểu điều gì?</h2>
+              <p className="emgpt-welcome-description">Hỏi, khám phá và ôn tập thông minh dựa trên tài liệu của bạn. Mình sẽ chỉ rõ nguồn trích dẫn để bạn dễ kiểm chứng.</p>
+              <div className="emgpt-prompt-grid">
+                {prompts.map(item => <button type="button" key={item.question} disabled={busy || !ready} onClick={() => { setQuestion(item.question); composerRef.current?.focus(); }}>
+                  <span className="emgpt-prompt-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span><span className="emgpt-prompt-arrow" aria-hidden="true">↗</span>
                 </button>)}
               </div>
+              {!ready && <button type="button" className="emgpt-welcome-doc" onClick={() => setDocumentPanelOpen(true)}>▤ Chọn hoặc xử lý tài liệu để bắt đầu</button>}
             </div>}
-            {visibleTurns.length > 0 && <div className="em30-messages">
-              {visibleTurns.map(turn => <div className="em30-turn" key={turn.id}>
-                <div className="em30-user-row"><div className="em30-user-bubble">{turn.prompt}</div><span className="em30-user-avatar" aria-hidden="true">B</span></div>
-                <div className="em30-assistant-row">
-                  <span className="em30-ai-avatar" aria-hidden="true">✦</span>
-                  <div className="em30-assistant-body">
-                    <strong className="em30-ai-name">EduMind AI</strong>
+            {visibleTurns.length > 0 && <div className="emgpt-thread">
+              {visibleTurns.map(turn => <article className="emgpt-turn" key={turn.id}>
+                <div className="emgpt-user-message"><div className="emgpt-user-bubble">{turn.prompt}</div></div>
+                <div className="emgpt-ai-message">
+                  <div className="emgpt-ai-mark" aria-label="EduMind AI">✦</div>
+                  <div className="emgpt-ai-text">
                     {turn.result ? <>
-                      <div className="em30-ai-content">{turn.result.answer}</div>
-                      <button className="em30-copy" type="button" onClick={() => void copyContent(turn.result!.answer)}>▢ Sao chép trả lời</button>
-                      <section className="em30-sources" aria-label="Nguồn tài liệu">
-                        <h3>▤ Nguồn tham khảo trong tài liệu <span>{turn.result.sources.length}</span></h3>
-                        {turn.result.sources.length ? <div className="em30-sources-list">
-                          {turn.result.sources.map((source, i) => <div className="em30-source" key={`${source.pageNumber}-${source.chunkIndex}-${i}`}>
-                            <div className="em30-source-top"><strong>{source.documentName ? `${source.documentName} · ` : ""}{source.citation ?? `${sourceLabel} ${source.pageNumber}`} · Đoạn {source.chunkIndex + 1}</strong>
-                              <button className="emc-open-source" type="button" onClick={e => openSource({ ...source, documentId: source.documentId ?? documentId! }, e.currentTarget)}>Xem cạnh chat ↗</button></div>
-                            <p>{source.excerpt}</p>
-                          </div>)}
-                        </div> : <p className="em30-muted">Không có đoạn nguồn phù hợp được trả về. Hãy kiểm tra câu trả lời trước khi sử dụng.</p>}
-                      </section>
-                    </> : turn.failure ? <div className="em30-answer-error" role="alert"><p>{turn.failure}</p>
-                      <button type="button" disabled={busy} onClick={() => void sendPrompt(turn.prompt)}>↻ Thử lại câu hỏi</button>
-                    </div> : <div className="em30-thinking" role="status">{turn.partial
-                      ? <div className="em30-ai-content">{turn.partial}<span className="emai-cursor">▍</span></div>
-                      : <><span className="em30-thinking-dots" aria-hidden="true">•••</span> Đang tìm thông tin trong tài liệu và tạo câu trả lời…</>}</div>}
+                      <TutorRichText text={turn.result.answer} />
+                      <div className="emgpt-answer-tools">
+                        <button type="button" title="Sao chép câu trả lời" onClick={() => void copyContent(turn.result!.answer)}>▢ Sao chép</button>
+                        {turn.result.sources.length > 0 && <button type="button" aria-expanded={sourceExpanded === turn.id} onClick={() => setSourceExpanded(sourceExpanded === turn.id ? null : turn.id)}>▤ Nguồn trích dẫn ({turn.result.sources.length}) {sourceExpanded === turn.id ? "⌃" : "⌄"}</button>}
+                      </div>
+                      {sourceExpanded === turn.id && <section className="emgpt-citations" aria-label="Các đoạn tài liệu được trích dẫn">
+                        {turn.result.sources.map((source, i) => <div className="emgpt-citation" key={`${source.documentId}-${source.pageNumber}-${source.chunkIndex}-${i}`}>
+                          <div className="emgpt-citation-head"><strong>{source.citation ?? `${sourceLabel} ${source.pageNumber}`} · Đoạn {source.chunkIndex + 1}</strong>
+                            <button type="button" onClick={e => openSource({ ...source, documentId: source.documentId ?? documentId! }, e.currentTarget)}>Xem nguồn ↗</button></div>
+                          <small title={source.documentName}>{source.documentName ?? selectedDocument?.originalFileName}</small><p>{source.excerpt}</p>
+                        </div>)}
+                      </section>}
+                    </> : turn.failure ? <div className="emgpt-answer-failure" role="alert"><strong>Chưa thể tạo câu trả lời</strong><p>{turn.failure}</p><button type="button" disabled={busy} onClick={() => void sendPrompt(turn.prompt)}>↻ Thử lại</button></div>
+                    : <div className="emgpt-response-wait" role="status" aria-label="Đang tạo câu trả lời">
+                      {turn.partial ? <><TutorRichText text={turn.partial} /><span className="emai-cursor">▍</span></> : <><span className="emgpt-loader" aria-hidden="true"><i /><i /><i /></span> Đang phân tích tài liệu…</>}
+                    </div>}
                   </div>
                 </div>
-              </div>)}
+              </article>)}
             </div>}
             <div ref={chatEndRef} />
           </div>
-          <div className="em30-composer-wrap">
-            <form className="em30-composer" onSubmit={handleAsk}>
-              <label className="em30-sr-only" htmlFor="em30-question">Nhập câu hỏi cho Gia sư AI</label>
-              <textarea ref={composerRef} id="em30-question" rows={2} maxLength={500} value={question}
-                disabled={busy || !documentId} onChange={e => setQuestion(e.target.value)} onKeyDown={handleComposerKeyDown}
-                placeholder={documentId ? "Hỏi bất kỳ điều gì về tài liệu của bạn…" : "Chọn PDF hoặc Word trước để đặt câu hỏi"} />
-              <div className="em30-composer-actions"><span>↵ Gửi · Shift+Enter xuống dòng <small>{question.length}/500</small></span>
-                {asking && useStreaming
-                  ? <button type="button" onClick={stopGeneration} aria-label="Dừng tạo câu trả lời" title="Dừng và không lưu phần đang tạo">■</button>
-                  : <button type="submit" disabled={busy || !documentId || question.trim().length < 3} aria-label="Gửi câu hỏi">{asking ? "…" : "↑"}</button>}</div>
+          <div className="emgpt-composer-area">
+            <form className="emgpt-composer" onSubmit={handleAsk}>
+              <label htmlFor="emgpt-question" className="em30-sr-only">Nhập câu hỏi về tài liệu</label>
+              <textarea ref={composerRef} id="emgpt-question" rows={1} maxLength={500} value={question}
+                disabled={busy || !ready} onChange={e => setQuestion(e.target.value)} onKeyDown={handleComposerKeyDown}
+                placeholder={loadingDocs ? "Đang tải tài liệu…" : !documentId ? "Chọn tài liệu để bắt đầu…" : !ready ? "Hãy xử lý tài liệu trước khi hỏi…" : "Nhắn tin cho EduMind AI…"} />
+              <div className="emgpt-composer-bottom">
+                <div className="emgpt-composer-options">
+                  <button type="button" className="emgpt-add-doc" onClick={() => setDocumentPanelOpen(true)} aria-label="Chọn tài liệu" title="Chọn nguồn tài liệu">＋</button>
+                  {selectedDocument && <button type="button" className="emgpt-attachment-pill" onClick={() => setDocumentPanelOpen(true)} title={selectedDocument.originalFileName}>
+                    ▤ <span>{selectedDocument.originalFileName}</span> <span className={ready ? "emgpt-pill-ready" : "emgpt-pill-warn"}>●</span>
+                  </button>}
+                  {additionalDocuments.length > 0 && <span className="emgpt-extra-docs">+{additionalDocuments.length} tài liệu</span>}
+                </div>
+                <div className="emgpt-composer-right">
+                  <span className="emgpt-char-count">{question.length}/500</span>
+                  {asking && useStreaming ? <button type="button" className="emgpt-send-btn" onClick={stopGeneration} aria-label="Dừng tạo câu trả lời" title="Dừng tạo">■</button>
+                    : <button type="submit" className="emgpt-send-btn" disabled={busy || !ready || question.trim().length < 3} aria-label="Gửi câu hỏi" title="Gửi câu hỏi">↑</button>}
+                </div>
+              </div>
             </form>
-            <label className="emai-stream-toggle"><input type="checkbox" checked={useStreaming} disabled={asking} onChange={e => setUseStreaming(e.target.checked)} />
-              Trả lời từng phần (Ollama) · tắt nếu đang dùng OpenAI</label>
-            <p>Gia sư AI nhớ các lượt gần đây trong từng cuộc trò chuyện và lưu lịch sử riêng vào MySQL. Nguồn Word được trích dẫn theo phần văn bản, không phải trang thực.</p>
+            <div className="emgpt-composer-footer"><label><input type="checkbox" checked={useStreaming} disabled={asking} onChange={e => setUseStreaming(e.target.checked)} /> Trả lời từng phần</label><span>Enter để gửi · Shift+Enter xuống dòng · AI có thể mắc lỗi, hãy kiểm tra nguồn.</span></div>
           </div>
         </> : <div className="em30-summary-scroll">
           <div className="em30-summary-heading"><span className="em30-kicker">CHẾ ĐỘ TÓM TẮT</span><h2>Biến tài liệu thành ghi chú dễ học</h2>
@@ -540,7 +621,7 @@ export default function AiTutorPage() {
               <select id="em30-level" className="em30-select" disabled={busy} value={summaryLevel} onChange={e => setSummaryLevel(e.target.value as "short" | "detailed")}>
                 <option value="short">Ngắn gọn · Ý chính</option><option value="detailed">Chi tiết · Ôn tập sâu</option>
               </select></div>
-            <button type="button" className="em30-primary" onClick={handleSummarize} disabled={busy || !documentId}>{summarizing ? "Đang tạo tóm tắt…" : "✦ Tạo bản tóm tắt mới"}</button>
+            <button type="button" className="em30-primary" onClick={handleSummarize} disabled={busy || !ready}>{summarizing ? "Đang tạo tóm tắt…" : "✦ Tạo bản tóm tắt mới"}</button>
           </div>
           {summarizing && <div className="em30-thinking" role="status">AI đang đọc và tổng hợp nội dung. Với tài liệu dài, quá trình này có thể mất vài phút.</div>}
           <section className="em30-history"><div className="em30-section-title"><h3>◷ Lịch sử tóm tắt</h3><span>{historyForDocument === documentId ? savedSummaries.length : 0} bản</span></div>
@@ -564,11 +645,46 @@ export default function AiTutorPage() {
                 <p>{source.excerpt}</p></div>)}</div>
             </section>
           </article> : <div className="em30-summary-placeholder"><span aria-hidden="true">▤</span><strong>Ghi chú học tập sẽ xuất hiện tại đây</strong><p>Bản tóm tắt mới cũng được lưu vào lịch sử MySQL để bạn xem lại.</p></div>}
-        </div>}
-      </div>
+        </div> }
+      </main>
+
+      {documentPanelOpen && <div className="emgpt-doc-overlay">
+        <button type="button" className="emgpt-doc-scrim" aria-label="Đóng danh sách tài liệu" onClick={() => setDocumentPanelOpen(false)} />
+        <aside ref={documentPanelRef} className="emgpt-doc-panel" role="dialog" aria-modal="true" aria-label="Chọn tài liệu kiến thức">
+          <div className="emgpt-doc-head"><div><span>NGUỒN KIẾN THỨC</span><h2>Tài liệu của bạn</h2><p>Gia sư AI chỉ trả lời dựa trên nội dung đã xử lý.</p></div>
+            <button type="button" className="emgpt-icon-btn" onClick={() => setDocumentPanelOpen(false)} aria-label="Đóng danh sách tài liệu">×</button></div>
+          {loadingDocs ? <p className="em30-muted" role="status">Đang tải danh sách…</p>
+          : documents.length === 0 ? <div className="emgpt-no-document"><strong>Chưa có tài liệu</strong><p>Hãy tải file Word hoặc PDF lên kho tài liệu trước khi đặt câu hỏi.</p><Link to="/app/documents">Đến kho tài liệu ↗</Link></div>
+          : <>
+            <label className="emgpt-field-label" htmlFor="emgpt-document">Tài liệu chính</label>
+            <select id="emgpt-document" className="em30-select" value={documentId ?? ""} disabled={busy} onChange={e => chooseDocument(Number(e.target.value))}>
+              {documents.map(doc => <option key={doc.id} value={doc.id}>{doc.originalFileName}</option>)}
+            </select>
+            {selectedDocument && <div className="emgpt-selected-document">
+              <span className="emgpt-doc-icon">{isWord ? "DOCX" : "PDF"}</span>
+              <div><strong title={selectedDocument.originalFileName}>{selectedDocument.originalFileName}</strong><small>{(selectedDocument.sizeBytes / 1024).toFixed(1)} KB</small></div>
+            </div>}
+            <div className={`emgpt-doc-status ${ready ? "ready" : ""}`}><span aria-hidden="true">●</span>{ready ? "Đã sẵn sàng để hỏi" : "Cần xử lý tài liệu"}</div>
+            <button type="button" className="em30-index-btn" disabled={busy || !documentId} onClick={() => void handleIndex()}>{indexing ? "Đang xử lý…" : ready ? "↻ Xử lý lại tài liệu" : "✦ Xử lý tài liệu"}</button>
+            {documentId && <a className="emgpt-original-link" href={getDocumentFileUrl(documentId)} target="_blank" rel="noreferrer">{isWord ? "↗ Mở file Word gốc" : "↗ Xem file PDF gốc"}</a>}
+            {mode === "ask" && documents.length > 1 && <fieldset className="emgpt-multidoc" disabled={busy}>
+              <legend>Thêm tài liệu tham khảo (tối đa 5)</legend>
+              {documents.filter(doc => doc.id !== documentId).map(doc => <label key={doc.id}>
+                <input type="checkbox" checked={additionalDocuments.includes(doc.id)}
+                  disabled={busy || (!additionalDocuments.includes(doc.id) && additionalDocuments.length >= 4) || doc.status.toLowerCase() !== "ready"}
+                  onChange={event => setAdditionalDocuments(old => event.target.checked ? [...old, doc.id] : old.filter(id => id !== doc.id))} />
+                <span title={doc.originalFileName}>{doc.originalFileName}</span>
+                <small>{doc.status.toLowerCase() === "ready" ? "Sẵn sàng" : "Chưa xử lý"}</small>
+              </label>)}
+            </fieldset>}
+            <p className="emgpt-doc-note">Xử lý lại sẽ thay thế chỉ mục đã lưu. Bạn có thể tải lên tài liệu khác trong <Link to="/app/documents">Kho tài liệu</Link>.</p>
+          </>}
+        </aside>
+      </div>}
       {selectedSource && <button type="button" className="emc-source-backdrop" aria-label="Đóng phần xem nguồn" onClick={closeSource} />}
       {selectedSource && <DocumentSidePanel key={`${selectedSource.documentId}-${selectedSource.pageNumber}-${selectedSource.chunkIndex}`} source={selectedSource}
         document={documents.find(d => d.id === (selectedSource.documentId ?? documentId))} onClose={closeSource} />}
-    </section>
+      </section>
+    </div>
   );
 }

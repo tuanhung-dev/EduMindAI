@@ -1,0 +1,961 @@
+
+/* ==========================================
+   EDUMIND AI — SUBJECTS PAGE
+   Giao dien Mon hoc
+   ========================================== */
+
+.esm-page {
+  --esm-green: #147a5b;
+  --esm-ink: #183b2c;
+  --esm-muted: #748678;
+  --esm-border: #e0eae2;
+
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 0 0 38px;
+  color: var(--esm-ink);
+}
+
+.esm-page *,
+.esm-page *::before,
+.esm-page *::after {
+  box-sizing: border-box;
+}
+
+.esm-page a {
+  text-decoration: none;
+}
+
+.esm-page button,
+.esm-page input,
+.esm-page select {
+  font: inherit;
+}
+
+.esm-page :is(a, button, input, select):focus-visible {
+  outline: 3px solid #79cba6;
+  outline-offset: 3px;
+}
+
+.esm-eyebrow {
+  font-size: 10px;
+  color: #178463;
+  font-weight: 850;
+  letter-spacing: 1.6px;
+}
+
+.esm-eyebrow--light {
+  color: #b0e7c9;
+}
+
+/* 1. Banner Mon hoc */
+
+.esm-hero {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.4fr) minmax(250px, .6fr);
+  gap: 20px;
+  align-items: center;
+  min-height: 300px;
+  padding: clamp(25px, 4vw, 46px);
+  overflow: hidden;
+  border-radius: 24px;
+
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      #218f68 0%,
+      transparent 52%
+    ),
+    linear-gradient(125deg, #123f30, #12664d 85%);
+
+  color: #fff;
+  position: relative;
+}
+
+.esm-hero::before {
+  content: "";
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  right: -180px;
+  top: -200px;
+  border: 1px solid #ffffff28;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 65px #ffffff0a,
+    0 0 0 140px #ffffff08;
+  pointer-events: none;
+}
+
+.esm-hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+.esm-hero h1 {
+  color: #fff;
+  font-size: clamp(29px, 3.4vw, 47px);
+  line-height: 1.17;
+  letter-spacing: -1.5px;
+  margin: 15px 0;
+}
+
+.esm-hero h1 span {
+  color: #bcebd0;
+}
+
+.esm-hero__content > p {
+  max-width: 630px;
+  color: #d9f1e3;
+  line-height: 1.8;
+  font-size: 13px;
+  margin: 0;
+}
+
+.esm-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 11px;
+  margin-top: 22px;
+}
+
+.esm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 12px;
+  min-height: 44px;
+  padding: 11px 17px;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform .2s, background .2s;
+}
+
+.esm-btn:hover {
+  transform: translateY(-2px);
+}
+
+.esm-btn--white {
+  background: #fff;
+  color: #136a4f;
+}
+
+.esm-btn--white:hover {
+  color: #0a533d;
+  background: #eafff0;
+}
+
+.esm-btn--ghost {
+  border: 1px solid #ffffff80;
+  background: #ffffff14;
+  color: #fff;
+}
+
+.esm-btn--ghost:hover {
+  background: #ffffff2c;
+  color: #fff;
+}
+
+.esm-btn--primary {
+  background: #147a5b;
+  color: #fff;
+}
+
+.esm-btn--primary:hover {
+  background: #0a6146;
+  color: #fff;
+}
+
+.esm-hero__highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 17px;
+  margin-top: 24px;
+  font-size: 10px;
+  color: #c0e9d2;
+}
+
+/* 2. Minh hoa ben phai Banner */
+
+.esm-hero__illustration {
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.esm-illustration__back {
+  position: absolute;
+  font-size: 160px;
+  color: #ffffff0e;
+  transform: rotate(-13deg);
+}
+
+.esm-illustration__book {
+  width: min(100%, 270px);
+  border: 1px solid #ffffffc9;
+  background: #f7fffa;
+  color: #174430;
+  box-shadow: 0 15px 35px #06271d45;
+  border-radius: 17px;
+  padding: 18px 17px 16px;
+  display: grid;
+  gap: 6px;
+  transform: rotate(-7deg);
+}
+
+.esm-illustration__book--bottom {
+  margin: -8px 0 0 52px;
+  transform: rotate(6deg);
+  background: #d9f5e5;
+}
+
+.esm-illustration__book span {
+  color: #178461;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.esm-illustration__book strong {
+  font-size: 14px;
+}
+
+.esm-illustration__book small {
+  font-size: 11px;
+  color: #67816f;
+}
+
+/* 3. The thong ke */
+
+.esm-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.esm-stat {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #fff;
+  border: 1px solid var(--esm-border);
+  border-radius: 17px;
+  padding: 20px;
+  min-width: 0;
+}
+
+.esm-stat__icon {
+  display: grid;
+  place-items: center;
+  width: 49px;
+  height: 49px;
+  flex: none;
+  background: #e8f4ec;
+  color: #167556;
+  font-size: 23px;
+  border-radius: 14px;
+}
+
+.esm-stat__icon--active {
+  background: #e6f8ee;
+  color: #159465;
+}
+
+.esm-stat__icon--muted {
+  background: #f2f3f4;
+  color: #75857b;
+}
+
+.esm-stat > div {
+  display: grid;
+  gap: 5px;
+}
+
+.esm-stat > div > span {
+  font-size: 12px;
+  color: #6c8071;
+}
+
+.esm-stat strong {
+  font-size: 26px;
+  color: #184b35;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.esm-stat small {
+  font-size: 10px;
+  color: #92a196;
+}
+
+/* 4. Tieu de va thanh cong cu */
+
+.esm-catalog {
+  margin-top: 36px;
+  scroll-margin-top: 100px;
+}
+
+.esm-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.esm-heading h2 {
+  font-size: clamp(21px, 2.2vw, 26px);
+  letter-spacing: -.6px;
+  color: var(--esm-ink);
+  margin: 7px 0 5px;
+}
+
+.esm-heading p {
+  font-size: 12px;
+  color: var(--esm-muted);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.esm-refresh {
+  padding: 9px 13px;
+  border: 1px solid #d5e7db;
+  background: #fff;
+  border-radius: 10px;
+  color: #176c51;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  flex: none;
+}
+
+.esm-refresh:hover {
+  background: #ecf8f0;
+}
+
+.esm-refresh:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.esm-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 230px);
+  gap: 12px;
+  background: #fff;
+  padding: 17px;
+  border: 1px solid var(--esm-border);
+  border-radius: 18px 18px 0 0;
+}
+
+.esm-search,
+.esm-sort {
+  min-width: 0;
+}
+
+.esm-search > label,
+.esm-sort > label {
+  display: block;
+  color: #415b49;
+  font-weight: 750;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.esm-search__control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 43px;
+  border: 1px solid #dae6dd;
+  border-radius: 11px;
+  padding: 0 12px;
+  background: #fbfdfa;
+}
+
+.esm-search__control:focus-within {
+  border-color: #1f9a72;
+  box-shadow: 0 0 0 3px #1aaf7b19;
+}
+
+.esm-search__control > span {
+  font-size: 24px;
+  color: #698571;
+}
+
+.esm-search__control input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 12px;
+  color: #274b36;
+}
+
+.esm-search__control input::placeholder {
+  color: #a0aca3;
+}
+
+.esm-search__control button {
+  border: 0;
+  background: transparent;
+  font-size: 21px;
+  color: #718779;
+  cursor: pointer;
+  padding: 3px 5px;
+}
+
+.esm-sort select {
+  width: 100%;
+  min-height: 43px;
+  border: 1px solid #dae6dd;
+  border-radius: 11px;
+  background: #fbfdfa;
+  color: #345c44;
+  padding: 0 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 5. Bo loc */
+
+.esm-tools-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--esm-border);
+  border-top: 0;
+  border-radius: 0 0 18px 18px;
+  background: #fff;
+  padding: 12px 16px;
+}
+
+.esm-filter {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.esm-filter button {
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 9px 11px;
+  color: #687c6e;
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.esm-filter button.is-active {
+  color: #126348;
+  background: #eaf7ee;
+  border-color: #d5efdd;
+}
+
+.esm-filter button span {
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.esm-view {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  background: #f1f5f1;
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.esm-view button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #62786a;
+  width: 33px;
+  height: 31px;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.esm-view button.is-active {
+  background: #fff;
+  color: #157a5b;
+  box-shadow: 0 1px 4px #153b2821;
+}
+
+.esm-result-count {
+  color: #6e8273;
+  font-size: 11px;
+  margin: 17px 0 12px;
+}
+
+.esm-result-count strong {
+  color: #1a7656;
+}
+
+/* 6. The Mon hoc */
+
+.esm-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.esm-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 266px;
+  padding: 21px;
+  border-radius: 19px;
+  border: 1px solid #e0eae3;
+  background: #fff;
+  box-shadow: 0 5px 18px #144a2e08;
+  transition:
+    transform .18s,
+    box-shadow .18s,
+    border-color .18s;
+}
+
+.esm-card:hover {
+  transform: translateY(-3px);
+  border-color: #add8bc;
+  box-shadow: 0 13px 30px #144a2e12;
+}
+
+.esm-card--inactive {
+  background: #fbfcfb;
+}
+
+.esm-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 19px;
+}
+
+.esm-card__symbol {
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  width: 43px;
+  height: 43px;
+  background: #e8f6ed;
+  color: #21795b;
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.esm-card:nth-child(3n+2) .esm-card__symbol {
+  background: #eaf6f7;
+  color: #197f82;
+}
+
+.esm-card:nth-child(3n+3) .esm-card__symbol {
+  background: #fff5e7;
+  color: #a47730;
+}
+
+.esm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  font-weight: 750;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.esm-status--active {
+  color: #138256;
+  background: #eaf8ef;
+}
+
+.esm-status--inactive {
+  color: #7b827c;
+  background: #f1f3f1;
+}
+
+.esm-status__dot {
+  background: currentColor;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.esm-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.esm-card__code {
+  display: block;
+  color: #208663;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .8px;
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+
+.esm-card h3 {
+  font-size: 18px;
+  line-height: 1.4;
+  margin: 0 0 9px;
+  color: #1c4431;
+  overflow-wrap: anywhere;
+}
+
+.esm-card__content > p {
+  color: #7b897e;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 17px;
+  overflow-wrap: anywhere;
+}
+
+.esm-card__bottom {
+  padding-top: 12px;
+  border-top: 1px solid #eaf0ea;
+  margin-top: auto;
+}
+
+.esm-card__date {
+  display: block;
+  color: #95a299;
+  font-size: 10px;
+  margin-bottom: 12px;
+}
+
+.esm-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.esm-card__actions a {
+  font-size: 11px;
+  font-weight: 850;
+  color: #147656;
+}
+
+.esm-card__actions a:hover {
+  text-decoration: underline;
+}
+
+.esm-card__actions a.esm-card__secondary {
+  color: #6f8073;
+}
+
+.esm-card__notice {
+  color: #89988d;
+  font-size: 11px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* 7. Kieu xem danh sach */
+
+.esm-grid--list {
+  grid-template-columns: 1fr;
+}
+
+.esm-grid--list .esm-card {
+  min-height: 0;
+  display: grid;
+  grid-template-columns:
+    170px minmax(0, 1fr) 230px;
+  gap: 18px;
+  align-items: center;
+}
+
+.esm-grid--list .esm-card__top {
+  margin: 0;
+  align-self: center;
+}
+
+.esm-grid--list .esm-card__bottom {
+  border-top: 0;
+  border-left: 1px solid #eaf0ea;
+  padding: 0 0 0 20px;
+  margin: 0;
+}
+
+.esm-grid--list .esm-card__content > p {
+  margin-bottom: 0;
+}
+
+/* 8. Loading, Error, Empty State */
+
+.esm-feedback {
+  border: 1px dashed #cbded0;
+  border-radius: 18px;
+  background: #fff;
+  padding: 46px 22px;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.esm-feedback > span {
+  font-size: 32px;
+  color: #1b8865;
+}
+
+.esm-feedback h3 {
+  font-size: 18px;
+  color: #26513a;
+  margin: 2px 0;
+}
+
+.esm-feedback p {
+  font-size: 12px;
+  color: #7c8b80;
+  margin: 0 0 6px;
+  line-height: 1.7;
+}
+
+.esm-feedback--error {
+  border-color: #f2c4bc;
+  background: #fffdfc;
+}
+
+.esm-feedback--error > span {
+  color: #be5a43;
+}
+
+.esm-spinner {
+  width: 29px;
+  height: 29px;
+  border-radius: 50%;
+  border: 3px solid #d9eee1;
+  border-top-color: #17845e;
+  animation: esm-spin .8s linear infinite;
+}
+
+@keyframes esm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 9. Huong dan hoc tap */
+
+.esm-learning {
+  margin-top: 36px;
+  border: 1px solid var(--esm-border);
+  border-radius: 21px;
+  background: #fff;
+  padding: clamp(20px, 3vw, 29px);
+}
+
+.esm-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.esm-steps li {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 13px;
+  background: #f5faf6;
+  display: flex;
+  gap: 12px;
+}
+
+.esm-steps li > span {
+  color: #15805d;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.esm-steps h3 {
+  font-size: 13px;
+  color: #234d37;
+  margin: 0 0 6px;
+}
+
+.esm-steps p {
+  color: #718276;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.esm-learning__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 19px;
+}
+
+.esm-learning__actions a {
+  font-size: 11px;
+  font-weight: 750;
+  color: #176b50;
+  border: 1px solid #cce7d6;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #fff;
+}
+
+.esm-learning__actions a:hover {
+  background: #eaf8ee;
+}
+
+.esm-footnote {
+  color: #8b9a8d;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 17px 0 0;
+}
+
+/* 10. Responsive Laptop */
+
+@media (max-width: 1150px) {
+  .esm-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .esm-hero {
+    grid-template-columns:
+      minmax(0, 1.4fr) minmax(200px, .6fr);
+  }
+
+  .esm-grid--list .esm-card {
+    grid-template-columns:
+      170px minmax(0, 1fr);
+  }
+
+  .esm-grid--list .esm-card__bottom {
+    grid-column: 2;
+    border: 0;
+    padding: 0;
+  }
+}
+
+/* 11. Responsive Tablet */
+
+@media (max-width: 850px) {
+  .esm-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .esm-hero__illustration {
+    display: none;
+  }
+
+  .esm-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 12. Responsive Mobile */
+
+@media (max-width: 640px) {
+  .esm-hero {
+    border-radius: 18px;
+    padding: 27px 22px;
+    min-height: 0;
+  }
+
+  .esm-hero h1 {
+    font-size: 31px;
+  }
+
+  .esm-stats {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .esm-stat {
+    padding: 13px 16px;
+  }
+
+  .esm-stat__icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .esm-stat strong {
+    font-size: 22px;
+  }
+
+  .esm-toolbar {
+    grid-template-columns: 1fr;
+    padding: 13px;
+  }
+
+  .esm-tools-bottom {
+    align-items: stretch;
+  }
+
+  .esm-view {
+    align-self: center;
+  }
+
+  .esm-filter {
+    flex: 1;
+  }
+
+  .esm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .esm-grid--list .esm-card {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .esm-grid--list .esm-card__top {
+    align-self: stretch;
+  }
+
+  .esm-grid--list .esm-card__bottom {
+    border-top: 1px solid #eaf0ea;
+    padding-top: 12px;
+  }
+
+  .esm-heading {
+    align-items: start;
+  }
+
+  .esm-heading h2 {
+    font-size: 21px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .esm-page .esm-btn,
+  .esm-page .esm-card {
+    transition: none;
+  }
+
+  .esm-spinner {
+    animation: none;
+  }
+}

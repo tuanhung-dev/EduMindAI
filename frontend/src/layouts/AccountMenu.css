@@ -1,0 +1,46 @@
+/* FE-011 — Menu tài khoản mở từ avatar trên header chung */
+.app-layout.ux29-layout .em-account-user-group { display: flex; align-items: center; justify-content: flex-end; min-width: 46px; }
+.em-account-menu { position: relative; z-index: 15; }
+.app-layout.ux29-layout .em-account-avatar {
+  width: 46px; height: 46px; border-radius: 50%; border: 2px solid #fff;
+  display: grid !important; place-items: center; cursor: pointer;
+  font-size: 14px; font-weight: 850; letter-spacing: .4px;
+  box-shadow: 0 0 0 1px #e0eee5; padding: 0; flex: none;
+}
+.app-layout.edm30-shell.ux29-layout .em-account-avatar.em-account-avatar--forest, .em-account-popover-avatar.em-account-avatar--forest { background: #dbf1e5; color: #126646; }
+.app-layout.edm30-shell.ux29-layout .em-account-avatar.em-account-avatar--mint, .em-account-popover-avatar.em-account-avatar--mint { background: #c7f5e4; color: #12675d; }
+.app-layout.edm30-shell.ux29-layout .em-account-avatar.em-account-avatar--sky, .em-account-popover-avatar.em-account-avatar--sky { background: #dbeefa; color: #285f8b; }
+.app-layout.ux29-layout .em-account-avatar:hover { box-shadow: 0 0 0 3px #b4dfc7; }
+.app-layout.ux29-layout .em-account-avatar[aria-expanded="true"] { box-shadow: 0 0 0 3px #84caa9; }
+.em-account-popover {
+  position: absolute; z-index: 200; top: calc(100% + 12px); right: 0;
+  width: min(324px, calc(100vw - 22px)); padding: 10px;
+  background: #fff; border: 1px solid #dcece1; border-radius: 18px;
+  box-shadow: 0 22px 60px rgba(11, 50, 30, .18); color: #204832;
+}
+.em-account-popover-head { display: flex; gap: 12px; align-items: center; padding: 13px 12px 16px; border-bottom: 1px solid #e8f0e9; }
+.em-account-popover-avatar { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; font-weight: 850; }
+.em-account-popover-head > div { display: grid; gap: 4px; min-width: 0; }
+.em-account-popover-head strong { font-size: 14px; overflow-wrap: anywhere; }
+.em-account-popover-head small { color: #7b8e80; font-size: 11px; overflow-wrap: anywhere; }
+.em-account-popover-links { display: grid; gap: 3px; padding: 10px 0; }
+.em-account-popover-links a, .em-account-signout {
+  display: flex; align-items: center; gap: 11px; min-height: 41px;
+  border-radius: 10px; padding: 9px 12px; background: transparent;
+  border: 0; color: #315744; font-size: 12px; font-weight: 700;
+  text-decoration: none; text-align: left; cursor: pointer; width: 100%;
+}
+.em-account-popover-links a > span:first-child, .em-account-signout > span { font-size: 18px; width: 21px; text-align: center; color: #278d68; }
+.em-account-popover-links a > span:last-child { margin-left: auto; color: #8ba99a; }
+.em-account-popover-links a:hover, .em-account-signout:hover { background: #eff8f1; color: #125d42; }
+.em-account-signout { border-top: 1px solid #edf2ed; border-radius: 0 0 10px 10px; color: #a14037; }
+.em-account-signout > span { color: #ba5c4d; }
+.em-account-signout:hover { color: #a14037; background: #fff3f1; }
+.em-account-popover > p { color: #8a998d; font-size: 10px; line-height: 1.5; margin: 9px 12px 6px; }
+@media (max-width: 560px) {
+  .app-layout.ux29-layout .em-account-avatar { width: 40px; height: 40px; }
+  .em-account-popover { right: -2px; }
+}
+@media (max-width: 365px) {
+  .app-layout.ux29-layout .ux29-user-group .em-account-avatar { display: grid !important; }
+}
