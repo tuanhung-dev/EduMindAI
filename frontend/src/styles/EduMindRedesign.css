@@ -1,0 +1,176 @@
+/* EduMind AI – Giao diện thống nhất trước Bước 30.
+   Chỉ áp dụng cho .edm30-shell, không thay dữ liệu và hành vi các trang cũ.
+   Lấy cảm hứng từ giao diện công cụ AI hiện đại, không sao chép nhãn hiệu.
+*/
+.app-layout.edm30-shell{
+  --em30-green:#1d7560;--em30-green-dark:#135d49;--em30-ink:#25352f;
+  --em30-muted:#77887c;--em30-border:#e2eae5;--em30-surface:#ffffff;
+  background:#f6f8f5;color:var(--em30-ink);font-family:Inter,"Segoe UI",Arial,sans-serif;
+}
+.app-layout.edm30-shell .sidebar.ux29-sidebar{
+  width:258px;padding:24px 14px 16px;background:#162d28;color:#e7f3ec;
+  border-right:1px solid #19352d;box-shadow:none;
+}
+.app-layout.edm30-shell .brand{margin-bottom:30px;padding:0 9px}
+.app-layout.edm30-shell .brand-logo{background:linear-gradient(145deg,#2c9a7a,#1b6658);width:41px;height:41px;border-radius:12px;font-size:22px}
+.app-layout.edm30-shell .brand h2{color:#f2fbf5;font-size:18px;font-weight:800;letter-spacing:-.5px}
+.app-layout.edm30-shell .brand p{color:#a0c5b3;font-size:9px;letter-spacing:1px;text-transform:uppercase}
+.app-layout.edm30-shell .menu-label,.app-layout.edm30-shell .ux29-menu-group-label{color:#83ab99;font-size:10px}
+.app-layout.edm30-shell .menu-label{padding-left:14px}
+.app-layout.edm30-shell .sidebar-menu{scrollbar-color:#345849 transparent;gap:4px}
+.app-layout.edm30-shell .menu-item{color:#c4dbcf;font-size:12px;font-weight:600;border-left:0;line-height:1.45;padding:11px 12px;border-radius:11px;min-height:43px;transition:background .15s,color .15s}
+.app-layout.edm30-shell .menu-item:hover{background:#25463c;color:white}
+.app-layout.edm30-shell .menu-item.active{background:#2b5144;color:#fff;border-left:0;padding-left:12px;font-weight:800;box-shadow:inset 3px 0 #7bd6b3}
+.app-layout.edm30-shell .menu-icon{font-size:18px;width:22px;color:#87bbaa}
+.app-layout.edm30-shell .menu-item.active .menu-icon{color:#b5f7d2}
+.app-layout.edm30-shell .sidebar-bottom{padding:14px 3px 0}
+.edm30-sidebar-ai{display:flex;gap:11px;align-items:center;border-radius:13px;padding:13px 11px;background:#254d40;color:#eafaf0;text-decoration:none;border:1px solid #376952}
+.edm30-sidebar-ai:hover{background:#2e604e}
+.edm30-sidebar-ai-icon{font-size:23px;color:#9ff3cb;flex:none}
+.edm30-sidebar-ai>span:nth-child(2){min-width:0;flex:1}
+.edm30-sidebar-ai strong{display:block;font-size:12px;color:white}
+.edm30-sidebar-ai small{display:block;color:#b4d8c4;font-size:10px;line-height:1.4;margin-top:4px}
+.edm30-sidebar-ai>span:last-child{font-size:16px;color:#a5e2c4}
+.app-layout.edm30-shell .copyright{color:#759b8b;margin-top:15px}
+.app-layout.edm30-shell .topbar{background:#fff;border-bottom:1px solid #e1e9e3;padding:13px 28px;min-height:72px;box-shadow:0 2px 13px #20352a04}
+.app-layout.edm30-shell .ux29-breadcrumbs .breadcrumb{color:#9ba7a0;font-size:12px}
+.app-layout.edm30-shell .ux29-breadcrumbs strong{color:#263e32;font-size:13px;font-weight:750}
+.app-layout.edm30-shell .environment-tag{color:#31745d;background:#e8f5ec;border-radius:99px}
+.app-layout.edm30-shell .avatar{color:#216b52;background:#d9f0e3}
+.app-layout.edm30-shell .ux29-logout{color:#49685a;border-color:#d9e8dd}
+.app-layout.edm30-shell .ux29-logout:hover{background:#eff9f2}
+.app-layout.edm30-shell .page-container{max-width:none;padding:22px 28px 42px;min-height:calc(100dvh - 72px)}
+.app-layout.edm30-shell .menu-item:focus-visible,.app-layout.edm30-shell button:focus-visible,
+.app-layout.edm30-shell a:focus-visible,.app-layout.edm30-shell input:focus-visible,
+.app-layout.edm30-shell select:focus-visible,.app-layout.edm30-shell textarea:focus-visible{outline:3px solid #65cba3;outline-offset:2px}
+/* Trang PDF, bài tập, quản lý: cùng nền trắng, viền nhẹ và góc mềm. */
+.app-layout.edm30-shell .quizzes-card,.app-layout.edm30-shell .fc-panel,
+.app-layout.edm30-shell .d27-panel,.app-layout.edm30-shell .d27-stat,
+.app-layout.edm30-shell .sp28-panel,.app-layout.edm30-shell .sp28-card{
+  background:#fff;border:1px solid #e1e9e4;border-radius:18px;
+  box-shadow:0 7px 22px rgba(28,62,42,.035);
+}
+.app-layout.edm30-shell .quizzes-page,.app-layout.edm30-shell .flashcards-page,
+.app-layout.edm30-shell .sp28-page,.app-layout.edm30-shell .d27-page{
+  max-width:1480px;margin:0 auto;
+}
+/* Tiêu đề nhất quán, không còn nhãn bước triển khai/bản demo gây nhiễu. */
+.app-layout.edm30-shell .quizzes-header,.app-layout.edm30-shell .fc-header{
+  background:linear-gradient(125deg,#214d3f,#256b55 64%,#408c70);
+  color:#fff;border:0;border-radius:19px;padding:28px 32px;
+  margin-bottom:22px;box-shadow:0 15px 30px #21674714;
+}
+.app-layout.edm30-shell .quizzes-header h1,.app-layout.edm30-shell .fc-header h1{color:#fff;font-size:clamp(22px,2.1vw,29px);letter-spacing:-.7px}
+.app-layout.edm30-shell .quizzes-header p,.app-layout.edm30-shell .fc-header p{color:#e1f5e8;line-height:1.7}
+.app-layout.edm30-shell .quizzes-eyebrow,.app-layout.edm30-shell .fc-eyebrow{color:#c5f8df;font-size:10px;letter-spacing:1px}
+.app-layout.edm30-shell .quizzes-tag,.app-layout.edm30-shell .fc-header>.fc-pill{background:#ffffff20;color:#f3fcf5;border:1px solid #ffffff3d}
+.app-layout.edm30-shell .quizzes-primary,.app-layout.edm30-shell .fc-primary,
+.app-layout.edm30-shell .fc-remember{background:#1d7560;border-color:#1d7560;color:#fff}
+.app-layout.edm30-shell .quizzes-primary:hover:not(:disabled),.app-layout.edm30-shell .fc-primary:hover:not(:disabled),
+.app-layout.edm30-shell .fc-remember:hover:not(:disabled){background:#125e4b}
+.app-layout.edm30-shell .quizzes-card h2,.app-layout.edm30-shell .fc-panel h2{color:#203c30;letter-spacing:-.25px}
+.app-layout.edm30-shell .quizzes-generator input,.app-layout.edm30-shell .quizzes-generator select,
+.app-layout.edm30-shell .fc-panel input:not([type="checkbox"]),.app-layout.edm30-shell .fc-panel select{
+  border:1px solid #d8e5dc;background:#fcfefd;color:#2e4336;border-radius:10px;min-height:43px;
+}
+.app-layout.edm30-shell .quizzes-card a,.app-layout.edm30-shell .fc-panel a{color:#206d52}
+.app-layout.edm30-shell .quizzes-saved-list button.selected,.app-layout.edm30-shell .fc-deck.fc-selected{background:#eaf6ee;border-color:#9fd6b8}
+.app-layout.edm30-shell .fc-flip-card{background:linear-gradient(148deg,#eef8f1,#fff);color:#254234;border:1px solid #b7dec8;border-radius:20px;box-shadow:0 10px 30px #2266440a}
+.app-layout.edm30-shell .fc-flipped{background:linear-gradient(148deg,#dff1e9,#f8fcf8)}
+.app-layout.edm30-shell .fc-stats>div{background:#f5faf6;border:1px solid #e3f1e8;border-radius:13px}
+.app-layout.edm30-shell .d27-hero,.app-layout.edm30-shell .sp28-hero{
+  background:linear-gradient(120deg,#1b493a,#24745c 65%,#389476);
+  color:#fff;border-radius:19px;box-shadow:0 16px 40px #235e4916;
+}
+.app-layout.edm30-shell .d27-hero h1,.app-layout.edm30-shell .sp28-hero h1{color:white}
+.app-layout.edm30-shell .d27-overline,.app-layout.edm30-shell .sp28-eyebrow{color:#c5f9dc}
+.app-layout.edm30-shell .d27-stat-icon.d27-violet,.app-layout.edm30-shell .d27-list-mark-alt{background:#eaf7ed;color:#22866a}
+.app-layout.edm30-shell .d27-review-circle{color:#1b755b;background:#f0f8f1;border-color:#cde8d7}
+.app-layout.edm30-shell .d27-progress-line span,.app-layout.edm30-shell .d27-meter div{background:linear-gradient(90deg,#1f7d65,#43b994)}
+.app-layout.edm30-shell .d27-review-link{background:#eaf6ef;color:#186b53}
+.app-layout.edm30-shell .d27-bar-purple{background:linear-gradient(#68bca3,#218267)}
+.app-layout.edm30-shell .d27-dot-purple{background:#218267}
+.app-layout.edm30-shell .d27-primary-link{color:#166c52}
+.app-layout.edm30-shell .d27-panel-head span{color:#29866b}
+.app-layout.edm30-shell .d27-quick-card{background:#fff;border-color:#e1e9e4;border-radius:15px}
+.app-layout.edm30-shell .d27-quick-card:hover{border-color:#82c6a9}
+/* Những màn hình không đổi JSX vẫn nhất quán nhờ kiểu chung. */
+.app-layout.edm30-shell .page-container button:not(:disabled){transition:background-color .15s,border-color .15s,box-shadow .15s}
+.app-layout.edm30-shell .page-container select,
+.app-layout.edm30-shell .page-container input,
+.app-layout.edm30-shell .page-container textarea{font-family:inherit}
+@media(max-width:1180px){.app-layout.edm30-shell .sidebar.ux29-sidebar{width:232px}.app-layout.edm30-shell .page-container{padding:19px}}
+@media(max-width:900px){
+  .app-layout.edm30-shell .sidebar.ux29-sidebar{width:min(315px,calc(100vw - 44px))}
+  .app-layout.edm30-shell .page-container{padding:15px 16px 35px}
+  .app-layout.edm30-shell .topbar{padding:10px 18px}
+}
+@media(max-width:560px){
+  .app-layout.edm30-shell .page-container{padding:10px 10px 28px}
+  .app-layout.edm30-shell .quizzes-header,.app-layout.edm30-shell .fc-header{padding:20px}
+}
+@media(prefers-reduced-motion:reduce){.app-layout.edm30-shell .menu-item,.app-layout.edm30-shell .page-container button{transition:none}}
+/* Thư viện PDF và môn học */
+.app-layout.edm30-shell .documents-page{max-width:1480px;margin:0 auto}
+.app-layout.edm30-shell .documents-page .doc-panel,.app-layout.edm30-shell .panel,
+.app-layout.edm30-shell .course-card,.app-layout.edm30-shell .progress-panel,
+.app-layout.edm30-shell .progress-metric{background:#fff;border:1px solid #e1e9e4;border-radius:18px;box-shadow:0 7px 22px #1c3e2a08}
+.app-layout.edm30-shell .documents-page .doc-panel-heading h3,
+.app-layout.edm30-shell .documents-page .doc-list-heading h3,
+.app-layout.edm30-shell .section-heading h2{color:#244537;letter-spacing:-.4px}
+.app-layout.edm30-shell .documents-page .doc-upload-btn,
+.app-layout.edm30-shell .progress-cta{background:#1f7660;color:#fff;border-radius:11px}
+.app-layout.edm30-shell .documents-page .doc-upload-btn:hover:not(:disabled){background:#145b48}
+.app-layout.edm30-shell .documents-page .doc-list-heading span{background:#eaf6ee;color:#206e51}
+.app-layout.edm30-shell .doc-open-btn,.app-layout.edm30-shell .outline-button{color:#236f56;border-color:#d5e7db}
+.app-layout.edm30-shell .course-card:hover{border-color:#80c7a9}
+.app-layout.edm30-shell .subject-code,.app-layout.edm30-shell .section-eyebrow{color:#268264}
+.app-layout.edm30-shell .course-icon{background:#eaf8f0;color:#277a61}
+/* Tiến độ học tập */
+.app-layout.edm30-shell .learning-progress-page{max-width:1480px;margin:0 auto;color:#253a31}
+.app-layout.edm30-shell .progress-head h1{color:#203d30;letter-spacing:-.6px}
+.app-layout.edm30-shell .progress-eyebrow,
+.app-layout.edm30-shell .progress-section-head span{color:#238268}
+.app-layout.edm30-shell .progress-refresh{background:#eaf6ee;border-color:#cde6d6;color:#20735a}
+.app-layout.edm30-shell .progress-metric>span{background:#eaf8f0;color:#26775d}
+.app-layout.edm30-shell .progress-metric strong{color:#234636}
+.app-layout.edm30-shell .progress-bar-track>span,
+.app-layout.edm30-shell .progress-meter span{background:linear-gradient(180deg,#51bc94,#207962)}
+.app-layout.edm30-shell .progress-bar-value,.app-layout.edm30-shell .progress-doc-title span,
+.app-layout.edm30-shell .progress-history-item b{color:#20775c}
+.app-layout.edm30-shell .progress-review-list li{background:#f6fbf6;border-color:#e2ede6}
+.app-layout.edm30-shell .progress-review-list li a,
+.app-layout.edm30-shell .progress-more{color:#1d755b}
+/* Chỉnh cấu trúc hiển thị các công cụ AI thành các khu vực làm việc rõ ràng. */
+.app-layout.edm30-shell .quizzes-top{grid-template-columns:minmax(270px,.8fr) minmax(0,1.35fr);align-items:stretch;gap:18px}
+.app-layout.edm30-shell .quizzes-generator{background:linear-gradient(180deg,#f9fcfa 0,#fff 100%)}
+.app-layout.edm30-shell .quizzes-kicker{color:#26775c;letter-spacing:1.3px}
+.app-layout.edm30-shell .quizzes-saved-list button{background:#fcfefd;border-color:#e2ebe4;border-radius:12px;min-height:63px}
+.app-layout.edm30-shell .quizzes-saved-icon{background:#e9f7ee;color:#288268}
+.app-layout.edm30-shell .quizzes-count{background:#eaf7ee;color:#206e55}
+.app-layout.edm30-shell .quizzes-question{border-color:#e1eae4;background:#fcfefd;border-radius:14px}
+.app-layout.edm30-shell .quizzes-letter{background:#e6f5ed;color:#23745e}
+.app-layout.edm30-shell .quizzes-start-panel{border-color:#cee7d7;background:#f4fbf6}
+.app-layout.edm30-shell .quizzes-source,.app-layout.edm30-shell .quizzes-history li a{color:#197257}
+.app-layout.edm30-shell .fc-top{grid-template-columns:minmax(270px,.85fr) minmax(0,1.15fr);gap:18px}
+.app-layout.edm30-shell .fc-deck{background:#fafffb;border-color:#e0e9e2}
+.app-layout.edm30-shell .fc-deck-open{color:#294736}
+.app-layout.edm30-shell .fc-stats strong{color:#1f7b60}
+.app-layout.edm30-shell .fc-face-label{color:#27765a}
+.app-layout.edm30-shell .fc-flip-card{min-height:270px}
+.app-layout.edm30-shell .sp28-summary>div{background:#fff;border:1px solid #e2eae4;border-radius:15px;box-shadow:0 5px 18px #25452d08}
+.app-layout.edm30-shell .sp28-summary strong{color:#206e56}
+.app-layout.edm30-shell .sp28-overline,.app-layout.edm30-shell .sp28-tag{color:#319875}
+.app-layout.edm30-shell .sp28-hero .sp28-overline{color:#d1f7de}
+.app-layout.edm30-shell .sp28-priority{border-color:#e3ebe6;border-radius:14px;background:#fcfefc}
+.app-layout.edm30-shell .sp28-rank{color:#22775e;background:#e8f7ee}
+.app-layout.edm30-shell .sp28-priority-score{color:#2c7a5c;background:#edf8f0}
+.app-layout.edm30-shell .sp28-day{border-color:#e2e9e4;border-radius:15px;background:#fff}
+.app-layout.edm30-shell .sp28-today{border-color:#8bccad;background:#f4faf6}
+.app-layout.edm30-shell .sp28-day-top span{color:#29836a}
+.app-layout.edm30-shell .sp28-task>a{color:#1e7155}
+.app-layout.edm30-shell .sp28-ai>button,.app-layout.edm30-shell .sp28-empty>a{background:#1f7560}
+.app-layout.edm30-shell .sp28-advice{color:#26503c;background:#edf8f0}
+@media(max-width:1000px){
+ .app-layout.edm30-shell .quizzes-top,.app-layout.edm30-shell .fc-top{grid-template-columns:1fr}
+}

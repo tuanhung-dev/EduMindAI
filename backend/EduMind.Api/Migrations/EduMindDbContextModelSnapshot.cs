@@ -19,6 +19,75 @@ namespace EduMind.Api.Migrations
                 .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
+            modelBuilder.Entity("EduMind.Api.Models.AiChatMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("AiChatSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("varchar(12)");
+
+                    b.Property<string>("SourcesJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AiChatSessionId", "Id");
+
+                    b.ToTable("ai_chat_messages", (string)null);
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.AiChatSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(191)
+                        .HasColumnType("varchar(191)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("varchar(180)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OwnerUserId", "DocumentId", "UpdatedAtUtc");
+
+                    b.ToTable("ai_chat_sessions", (string)null);
+                });
+
             modelBuilder.Entity("EduMind.Api.Models.Document", b =>
                 {
                     b.Property<int>("Id")
@@ -97,6 +166,61 @@ namespace EduMind.Api.Migrations
                     b.ToTable("document_chunks", (string)null);
                 });
 
+            modelBuilder.Entity("EduMind.Api.Models.DocumentSummary", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<string>("CoverageNote")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsPartial")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("varchar(12)");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(191)
+                        .HasColumnType("varchar(191)");
+
+                    b.Property<string>("PagesJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("SampledChunks")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourcesJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("SummaryContent")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("TotalChunks")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId", "OwnerUserId", "CreatedAtUtc");
+
+                    b.ToTable("document_summaries", (string)null);
+                });
+
             modelBuilder.Entity("EduMind.Api.Models.EduMindUser", b =>
                 {
                     b.Property<string>("Id")
@@ -160,6 +284,116 @@ namespace EduMind.Api.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.Flashcard", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<string>("Back")
+                        .IsRequired()
+                        .HasMaxLength(1600)
+                        .HasColumnType("varchar(1600)");
+
+                    b.Property<int>("FlashcardDeckId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Front")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
+
+                    b.Property<DateTime?>("LastReviewedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("NextReviewAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReviewCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SourcePageNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SuccessStreak")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextReviewAtUtc");
+
+                    b.HasIndex("FlashcardDeckId", "Position")
+                        .IsUnique();
+
+                    b.ToTable("flashcards", (string)null);
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.FlashcardDeck", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(191)
+                        .HasColumnType("varchar(191)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Topic")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OwnerUserId", "CreatedAtUtc");
+
+                    b.ToTable("flashcard_decks", (string)null);
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.FlashcardReviewEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("FlashcardId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Known")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(191)
+                        .HasColumnType("varchar(191)");
+
+                    b.Property<DateTime>("ReviewedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "ReviewedAtUtc");
+
+                    b.ToTable("flashcard_review_events", (string)null);
                 });
 
             modelBuilder.Entity("EduMind.Api.Models.Quiz", b =>
@@ -333,6 +567,41 @@ namespace EduMind.Api.Migrations
                     b.ToTable("quiz_questions", (string)null);
                 });
 
+            modelBuilder.Entity("EduMind.Api.Models.StudyTaskCompletion", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CompletedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("varchar(24)");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(191)
+                        .HasColumnType("varchar(191)");
+
+                    b.Property<DateTime>("StudyDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OwnerUserId", "StudyDate", "DocumentId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("study_task_completions", (string)null);
+                });
+
             modelBuilder.Entity("EduMind.Api.Models.Subject", b =>
                 {
                     b.Property<int>("Id")
@@ -495,6 +764,28 @@ namespace EduMind.Api.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("EduMind.Api.Models.AiChatMessage", b =>
+                {
+                    b.HasOne("EduMind.Api.Models.AiChatSession", "Session")
+                        .WithMany("Messages")
+                        .HasForeignKey("AiChatSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.AiChatSession", b =>
+                {
+                    b.HasOne("EduMind.Api.Models.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
             modelBuilder.Entity("EduMind.Api.Models.Document", b =>
                 {
                     b.HasOne("EduMind.Api.Models.Subject", "Subject")
@@ -512,6 +803,39 @@ namespace EduMind.Api.Migrations
                         .WithMany()
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.DocumentSummary", b =>
+                {
+                    b.HasOne("EduMind.Api.Models.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.Flashcard", b =>
+                {
+                    b.HasOne("EduMind.Api.Models.FlashcardDeck", "Deck")
+                        .WithMany("Cards")
+                        .HasForeignKey("FlashcardDeckId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Deck");
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.FlashcardDeck", b =>
+                {
+                    b.HasOne("EduMind.Api.Models.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Document");
@@ -569,6 +893,17 @@ namespace EduMind.Api.Migrations
                     b.Navigation("Quiz");
                 });
 
+            modelBuilder.Entity("EduMind.Api.Models.StudyTaskCompletion", b =>
+                {
+                    b.HasOne("EduMind.Api.Models.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -618,6 +953,16 @@ namespace EduMind.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.AiChatSession", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("EduMind.Api.Models.FlashcardDeck", b =>
+                {
+                    b.Navigation("Cards");
                 });
 
             modelBuilder.Entity("EduMind.Api.Models.Quiz", b =>

@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -9,11 +10,13 @@ public sealed class AiTextService
 {
     private readonly HttpClient _client;
     private readonly IConfiguration _config;
+    private readonly ILogger<AiTextService> _logger;
 
-    public AiTextService(HttpClient client, IConfiguration config)
+    public AiTextService(HttpClient client, IConfiguration config, ILogger<AiTextService> logger)
     {
         _client = client;
         _config = config;
+        _logger = logger;
     }
 
     public async Task<string> GenerateAsync(
@@ -60,10 +63,7 @@ public sealed class AiTextService
         var model = _config["AI:Ollama:Model"]?.Trim();
         if (string.IsNullOrWhiteSpace(model)) model = "qwen3:4b-instruct";
 
-        int numCtx = 8192;
-        if (int.TryParse(_config["AI:Ollama:NumCtx"], out int configuredCtx) &&
-            configuredCtx is >= 2048 and <= 16384)
-            numCtx = configuredCtx;
+        int numCtx = GetOllamaNumCtx();
 
         var payload = new Dictionary<string, object?>
         {
@@ -80,12 +80,7 @@ public sealed class AiTextService
 
         using var response = await _client.PostAsJsonAsync($"{baseUrl}/api/chat", payload, ct);
         if (!response.IsSuccessStatusCode)
-        {
-            var hint = response.StatusCode == System.Net.HttpStatusCode.NotFound
-                ? $"Khong tim thay model {model}. Chay: ollama pull {model}"
-                : $"Ollama tra HTTP {(int)response.StatusCode}. Kiem tra Ollama dang chay va RAM/VRAM.";
-            throw new AiGenerationException(502, hint);
-        }
+            throw await CreateOllamaExceptionAsync(response, model, ct);
 
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
         if (!json.RootElement.TryGetProperty("message", out var message) ||
@@ -148,6 +143,104 @@ public sealed class AiTextService
             }
         }
         return RequiredText(string.Join("\n", parts), "OpenAI");
+    }
+
+    public bool SupportsStreaming => (_config["AI:Provider"] ?? "OpenAI")
+        .Equals("Ollama", StringComparison.OrdinalIgnoreCase);
+
+    // Ollama emits one JSON object per line. Forward only actual message.content,
+    // never expose model reasoning or raw protocol frames to the browser.
+    public async IAsyncEnumerable<string> StreamOllamaAsync(
+        string instructions, string input, int maxTokens,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        if (!SupportsStreaming)
+            throw new AiGenerationException(409, "Streaming requires Ollama.");
+        var baseUrl = (_config["AI:Ollama:BaseUrl"] ?? "http://127.0.0.1:11434").Trim().TrimEnd('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme != "http" ||
+            !uri.IsLoopback || uri.AbsolutePath != "/" || uri.Query.Length > 0 || uri.Fragment.Length > 0)
+            throw new AiGenerationException(503, "Ollama must use a local HTTP address.");
+        var model = _config["AI:Ollama:Model"]?.Trim();
+        if (string.IsNullOrWhiteSpace(model)) model = "qwen3:4b-instruct";
+        using var request = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/api/chat")
+        {
+            Content = JsonContent.Create(new {
+                model, stream = true,
+                messages = new object[] { new { role = "system", content = instructions }, new { role = "user", content = input } },
+                options = new { num_ctx = GetOllamaNumCtx(), num_predict = maxTokens, temperature = 0.2 }
+            })
+        };
+        using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateOllamaExceptionAsync(response, model, ct);
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+        bool completed = false;
+        while (await reader.ReadLineAsync(ct) is { } line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            using var json = JsonDocument.Parse(line);
+            if (json.RootElement.TryGetProperty("error", out var error))
+                throw new AiGenerationException(502, "Ollama streaming error: " + error.ToString());
+            if (json.RootElement.TryGetProperty("message", out var msg) &&
+                msg.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
+            {
+                string? delta = content.GetString();
+                if (!string.IsNullOrEmpty(delta)) yield return delta;
+            }
+            if (json.RootElement.TryGetProperty("done", out var done) && done.ValueKind == JsonValueKind.True)
+            { completed = true; break; }
+        }
+        if (!completed) throw new AiGenerationException(502, "Ollama stream interrupted before completion.");
+    }
+
+    // Reduce the default context for local machines. Override with AI:Ollama:NumCtx
+    // (or environment variable AI__Ollama__NumCtx) after checking available RAM/VRAM.
+    private int GetOllamaNumCtx()
+    {
+        if (int.TryParse(_config["AI:Ollama:NumCtx"], out int configuredCtx) &&
+            configuredCtx is >= 2048 and <= 16384)
+            return configuredCtx;
+        return 4096;
+    }
+
+    // Ollama returns the real failure cause as JSON: { "error": "..." }.
+    // Read it rather than always blaming RAM/VRAM for any HTTP 400.
+    private async Task<AiGenerationException> CreateOllamaExceptionAsync(
+        HttpResponseMessage response, string model, CancellationToken ct)
+    {
+        string responseBody = await response.Content.ReadAsStringAsync(ct);
+        string detail = "Ollama khong cung cap chi tiet loi.";
+        if (!string.IsNullOrWhiteSpace(responseBody))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(responseBody);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                    doc.RootElement.TryGetProperty("error", out var value) &&
+                    value.ValueKind == JsonValueKind.String)
+                    detail = value.GetString() ?? detail;
+            }
+            catch (JsonException)
+            {
+                // Non-JSON errors are logged only as a generic message.
+                detail = "Ollama tra ve du lieu loi khong phai JSON.";
+            }
+        }
+
+        // Do not print arbitrary multi-line error data into logs or the UI.
+        detail = string.Concat(detail.Select(ch => char.IsControl(ch) ? ' ' : ch)).Trim();
+        if (detail.Length > 350) detail = detail[..350] + "...";
+        _logger.LogWarning("Ollama /api/chat HTTP {StatusCode} model={Model}: {Error}",
+            (int)response.StatusCode, model, detail);
+
+        string hint = (int)response.StatusCode switch
+        {
+            404 => $"Model '{model}' chua co trong Ollama. Kiem tra 'ollama list'.",
+            400 => "Ollama tu choi yeu cau (HTTP 400).",
+            _ => $"Ollama tra HTTP {(int)response.StatusCode}."
+        };
+        return new AiGenerationException(502, $"{hint} Chi tiet: {detail}");
     }
 
     private static string RequiredText(string? output, string provider)

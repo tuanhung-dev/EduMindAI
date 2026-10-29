@@ -1,0 +1,86 @@
+/* EduMind AI Nhóm C – scoped progressive UI upgrades. No framework dependency. */
+.app-layout.edm30-shell { --emc-ink: #193a31; --emc-green: #176e57; --emc-border: #dce9e2; }
+.app-layout.edm30-shell .page-container { min-width: 0; }
+.app-layout.edm30-shell .page-container :is(button,a,input,textarea,select):focus-visible,
+.em30-tutor :is(button,a,input,textarea,select):focus-visible { outline: 3px solid #75bdad; outline-offset: 3px; }
+.app-layout.edm30-shell :is(.quizzes-card,.doc-panel,.fc-deck,.sp28-day,.dashboard-card,.progress-card) { box-shadow: 0 4px 20px rgba(24, 66, 50, .045); }
+.app-layout.edm30-shell :is(.quizzes-primary,.doc-upload-btn,.em30-primary,.fc-btn-primary) { transition: filter .15s, transform .15s; }
+.app-layout.edm30-shell :is(.quizzes-primary,.doc-upload-btn,.em30-primary,.fc-btn-primary):hover:not(:disabled) { filter: brightness(.96); }
+.app-layout.edm30-shell :is(.quizzes-primary,.doc-upload-btn,.em30-primary,.fc-btn-primary):active:not(:disabled) { transform: translateY(1px); }
+.app-layout.edm30-shell :is(.doc-file-info,.quizzes-saved-detail,.fc-deck-info) { min-width: 0; overflow-wrap: anywhere; }
+
+/* C1 – history management */
+.em30-tutor .emc-history { min-height: 120px; }
+.em30-tutor .emc-search-row { display:flex; gap:5px; margin-top:13px; }
+.em30-tutor .emc-search-row input { flex:1; min-width:0; padding:9px 11px; background:white; border:1px solid #ceded4; border-radius:10px; font-size:12px; color:#284438; }
+.em30-tutor .emc-search-row button { flex:none; min-width:32px; border:1px solid #d3e3db; background:white; border-radius:9px; cursor:pointer; }
+.em30-tutor .emc-history-filters { display:flex; gap:6px; margin-top:10px; }
+.em30-tutor .emc-history-filters button { border:1px solid #dbe7e0; background:white; border-radius:9px; padding:7px 10px; font-size:11px; cursor:pointer; color:#3c5a4c; }
+.em30-tutor .emc-history-filters button.selected { background:#ddf4e9; border-color:#83bea4; color:#165c45; font-weight:750; }
+.em30-tutor .emc-history-group { font-size:10px; color:#66857a; letter-spacing:.6px; font-weight:800; margin:14px 4px 6px; text-transform:uppercase; }
+.em30-tutor .emc-history-list { max-height:315px; display:block; scrollbar-width:thin; }
+.em30-tutor .emc-history-item { margin:3px 0; padding:2px; }
+.em30-tutor .emc-history-item.selected { background:#e2f5e9; border-color:#92cbb0; }
+.em30-tutor .emc-history-item > button.emc-history-open { display:block; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border:0; padding:8px 5px; text-align:left; background:transparent; font-size:11px; cursor:pointer; color:#335847; }
+.em30-tutor .emc-history-actions { display:flex; gap:1px; flex-shrink:0; }
+.em30-tutor .emc-history-actions button { width:23px; height:27px; flex:none; border:0; border-radius:6px; padding:0; font-size:14px; background:transparent; color:#547b69; cursor:pointer; }
+.em30-tutor .emc-history-actions button:hover { background:#d1ecdc; }
+.em30-tutor .emc-rename { display:flex; gap:3px; width:100%; }
+.em30-tutor .emc-rename input { flex:1; width:40px; min-width:0; padding:7px; border-radius:7px; border:1px solid #7dbc9b; font-size:11px; }
+.em30-tutor .emc-rename button { padding:4px 6px; flex:none; border:0; background:#e2f4ea; border-radius:6px; cursor:pointer; }
+
+/* C2 – PDF viewer in the same workspace. Source is an authenticated Blob URL. */
+.em30-tutor.emc-tutor-with-source { grid-template-columns:225px minmax(0,1fr) minmax(290px,38%); }
+.emc-source-backdrop { display:none; }
+.emc-source-panel { display:flex; flex-direction:column; min-width:0; min-height:0; background:#fafdfb; border-left:1px solid #cfdfd6; overflow:hidden; }
+.emc-source-head { padding:15px; display:flex; justify-content:space-between; gap:12px; align-items:flex-start; border-bottom:1px solid #dcece2; }
+.emc-source-head h2 { font-size:13px; line-height:1.45; overflow-wrap:anywhere; margin:5px 0 0; color:#224e3d; }
+.emc-eyebrow { color:#43856c; font-size:10px; letter-spacing:1px; font-weight:800; }
+.emc-icon-button { width:34px; height:34px; border-radius:10px; background:white; border:1px solid #c8ded0; color:#325946; cursor:pointer; font-size:22px; flex:none; }
+.emc-source-meta { margin:12px 15px 0; background:#e7f4eb; padding:9px 11px; font-size:11px; font-weight:700; border-radius:10px; color:#1b6c52; }
+.emc-source-excerpt { margin:12px 15px; border:1px solid #d8e9df; padding:12px; border-radius:11px; background:white; max-height:190px; overflow:auto; }
+.emc-source-excerpt strong { font-size:11px; }
+.emc-source-excerpt p { font-size:11px; line-height:1.6; overflow-wrap:anywhere; color:#49695a; white-space:pre-wrap; }
+.emc-pdf-frame { flex:1; width:100%; min-height:260px; border:0; background:white; }
+.emc-word-preview { padding:16px; font-size:12px; color:#496758; line-height:1.75; }
+.emc-secondary-action { display:inline-block; margin-top:10px; padding:10px 13px; border-radius:10px; background:#176d55; color:white!important; font-weight:750; text-decoration:none; }
+.emc-open-source { border:1px solid #b7dbca; background:#ecf8f1; color:#176e54; border-radius:8px; font-weight:750; padding:7px 9px; font-size:11px; white-space:nowrap; cursor:pointer; }
+.emc-open-source:hover { background:#d9f2e4; }
+.emc-inline-status { margin:16px; display:flex; align-items:center; gap:8px; font-size:12px; color:#476757; }
+.emc-alert { background:#fff2ee; margin:16px; padding:12px; border-radius:8px; font-size:12px; color:#99422d; }
+
+/* C4 – upload progress is a named state, never fabricated percentages */
+.emc-upload-status { display:flex; align-items:center; flex-wrap:wrap; gap:9px; background:#eaf6f0; color:#1c6a52; padding:11px; border:1px solid #c8e8d5; border-radius:12px; font-size:12px; }
+.emc-cancel { margin-left:auto; border:1px solid #cc9b8b; border-radius:8px; padding:7px 10px; background:white; color:#a04736; cursor:pointer; }
+.emc-muted-note { font-size:11px; line-height:1.6; color:#728679; }
+.emc-spinner { width:16px; height:16px; flex:none; display:inline-block; border:2px solid #bedbc9; border-top-color:#177556; border-radius:50%; animation:emc-spin .8s linear infinite; }
+@keyframes emc-spin { to { transform:rotate(360deg); } }
+.emc-document-skeleton { display:grid; gap:12px; }
+.emc-document-skeleton span { display:block; height:68px; border-radius:12px; background:linear-gradient(95deg,#f0f5f1,#e3f0e8,#f0f5f1); background-size:200% 100%; animation:emc-shimmer 1.6s infinite; }
+@keyframes emc-shimmer { to { background-position-x:-200%; } }
+
+/* C3–C5 – consistent spacing, mobile behavior, target sizes and reduced motion */
+@media(max-width:1420px) { .em30-tutor.emc-tutor-with-source { grid-template-columns:200px minmax(0,1fr) minmax(265px,36%); } }
+@media(max-width:1150px) {
+  .em30-tutor.emc-tutor-with-source { grid-template-columns: minmax(0,1fr) minmax(280px,44%); }
+  .em30-tutor.emc-tutor-with-source .em30-docrail { display:none; }
+}
+@media(max-width:900px) {
+  .em30-tutor.emc-tutor-with-source { display:flex; flex-direction:column; }
+  .em30-tutor.emc-tutor-with-source .em30-docrail { display:flex; }
+  .emc-source-backdrop { position:fixed; z-index:1099; inset:0; width:100%; height:100%; border:0; background:#0f271caa; }
+  .emc-source-panel { position:fixed; z-index:1100; inset:5dvh 3vw; box-shadow:0 10px 60px #10251c59; border:1px solid #b9d5c6; border-radius:15px; }
+  .emc-pdf-frame { min-height:30vh; }
+  .em30-tutor .emc-history-list { max-height:200px; }
+}
+@media(max-width:600px) {
+  .emc-source-panel { inset:2dvh 8px; }
+  .em30-tutor .emc-history-actions button { width:30px; height:32px; }
+  .app-layout.edm30-shell .page-container { padding-inline:10px; }
+  .app-layout.edm30-shell :is(.documents-page .doc-panel,.quizzes-page .quizzes-card) { padding:16px; }
+  .app-layout.edm30-shell .doc-item { flex-wrap:wrap; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .emc-spinner,.emc-document-skeleton span { animation:none; }
+  .app-layout.edm30-shell *, .em30-tutor * { scroll-behavior:auto!important; transition-duration:.01ms!important; }
+}

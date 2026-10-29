@@ -12,6 +12,7 @@ import SubjectsPage from "./pages/SubjectsPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AiTutorPage from "./pages/AiTutorPage";
 import QuizzesPage from "./pages/QuizzesPage";
+import StudyPlanPage from "./pages/StudyPlanPage";
 import QuizTakePage from "./pages/QuizTakePage";
 import QuizResultPage from "./pages/QuizResultPage";
 import LearningProgressPage from "./pages/LearningProgressPage";
@@ -25,10 +26,21 @@ import AccountRecoveryPage from "./pages/AccountRecoveryPage";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import "./App.css";
+import NotFoundPage from "./pages/NotFoundPage";
+import DocumentDetailPage from "./pages/DocumentDetailPage";
+import ApiToastHost from "./components/ApiToastHost";
+import "./styles/FeedbackSystem.css";
+import "./styles/UnifiedWorkspace.css";
 
 function Private({ children }: { children: React.ReactNode }) {
   const { user, checking } = useAuth();
-  if (checking) return <p style={{ padding: 32 }}>Đang kiểm tra đăng nhập…</p>;
+  if (checking) return (
+    <div className="ux29-auth-loading" role="status" aria-live="polite">
+      <span className="ux29-spinner" aria-hidden="true" />
+      <strong>Đang xác thực tài khoản</strong>
+      <p>EduMind AI đang kiểm tra phiên đăng nhập của bạn…</p>
+    </div>
+  );
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -63,11 +75,15 @@ function AppRoutes() {
             path="documents"
             element={<DocumentsPage />}
           />
+          <Route path="documents/:id" element={<DocumentDetailPage />} />
 
           <Route
             path="ai-tutor"
             element={<AiTutorPage />}
           />
+
+          <Route path="flashcards" element={<Navigate to="/app/ai-tutor" replace />} />
+          <Route path="study-plan" element={<StudyPlanPage />} />
 
           <Route
             path="quizzes"
@@ -84,12 +100,12 @@ function AppRoutes() {
           <Route path="admin/subjects" element={<AdminOnly><AdminSubjectsPage /></AdminOnly>} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/app" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   );
 }
 
 export default function App() {
-  return <AuthProvider><AppRoutes /></AuthProvider>;
+  return <AuthProvider><AppRoutes /><ApiToastHost /></AuthProvider>;
 }

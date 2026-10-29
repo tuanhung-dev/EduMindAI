@@ -1,0 +1,20 @@
+EDUMIND AI - FE011 - SUA LOI IMPORT LOCAL PROFILE
+
+Van de: Cannot find module '../services/localProfileService'
+File can bo sung: frontend/src/services/localProfileService.ts
+
+HUONG DAN:
+1. Luu file ZIP vao Downloads.
+2. Mo PowerShell va chay:
+
+   Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\EduMindAI_FE011_Fix_Import_localProfileService.zip" -DestinationPath "C:\Projects\EduMindAI" -Force
+
+3. Xac nhan:
+   Test-Path "C:\Projects\EduMindAI\frontend\src\services\localProfileService.ts"
+
+4. Trong frontend:
+   cd C:\Projects\EduMindAI\frontend
+   npm run build
+
+File nay khong thay doi API, backend, css, AppLayout hay AccountSettingsPage.
+Neu van loi, mo View > Problems trong VS Code, hoac gui loi npm run build.

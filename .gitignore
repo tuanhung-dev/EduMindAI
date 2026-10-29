@@ -1,0 +1,41 @@
+# Backend ASP.NET Core
+**/bin/
+**/obj/
+**/.vs/
+*.user
+*.suo
+
+# Frontend React
+**/node_modules/
+**/dist/
+**/coverage/
+dist-ssr/
+
+# Environment variables
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local Backend settings
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/appsettings.Local.json
+
+# Uploaded PDF and documents
+**/Storage/
+*.pdf
+
+# Logs
+*.log
+logs/
+**/TestResults/
+
+# Temporary files
+*.tmp
+*.zip
+
+# VS Code and IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store

@@ -1,0 +1,11 @@
+/* FE-012: Thong bao loi dung chung + cham soc man hinh nho. */
+.ed-feedback-toasts{position:fixed;right:18px;bottom:20px;z-index:9999;width:min(410px,calc(100vw - 26px));pointer-events:none}
+.ed-feedback-toast{display:flex;gap:12px;align-items:start;border:1px solid #e4d4b7;border-left:4px solid #d1983e;border-radius:14px;background:#fff;padding:14px;box-shadow:0 16px 42px #17352436;color:#36513d;pointer-events:auto}
+.ed-feedback-icon{width:27px;height:27px;display:grid;place-items:center;border-radius:50%;flex-shrink:0;background:#fff3df;color:#926119;font-weight:900}
+.ed-feedback-toast>div{flex:1;min-width:0}.ed-feedback-toast strong{display:block;font-size:13px;margin-bottom:4px}.ed-feedback-toast p{font-size:12px;line-height:1.6;margin:0;overflow-wrap:anywhere}.ed-feedback-toast button{border:0;background:transparent;color:#748679;cursor:pointer;font-size:23px;padding:0 3px;line-height:1}
+.ed-feedback-toast button:focus-visible{outline:3px solid #80cfa7;outline-offset:2px}
+@media(max-width:640px){.ed-feedback-toasts{right:13px;left:13px;bottom:14px;width:auto}.ed-feedback-toast{padding:12px}}
+/* Tranh tran ngang trong nhom trang can ban khi co ten file/dong chi tiet dai. */
+.page-container,.ux29-main,.main-area{min-width:0}
+.edocs-page,.esm-page,.emai-page,.elp-page,.edd-page{min-width:0;max-width:100%}
+@media(max-width:740px){.edocs-page img,.esm-page img,.elp-page img,.edd-page img{max-width:100%}.edocs-page table,.esm-page table,.elp-page table,.edd-page table{display:block;max-width:100%;overflow-x:auto}}

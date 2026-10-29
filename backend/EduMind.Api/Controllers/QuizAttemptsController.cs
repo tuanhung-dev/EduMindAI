@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using EduMind.Api.Data;
 using EduMind.Api.Models;
+using EduMind.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,8 +20,7 @@ public sealed class SubmitQuizAttemptRequest
 }
 
 /// <summary>
-/// Bước 15 - mọi dữ liệu bài làm chỉ dành cho Development, KHÔNG deploy công khai
-/// trước khi thêm Identity và kiểm tra người sở hữu tại từng endpoint.
+/// Bài làm thuộc tài khoản đăng nhập. Production chỉ mở khi Feature được bật.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -30,20 +30,19 @@ public sealed class QuizAttemptsController : ControllerBase
     private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private bool IsAdmin => User.IsInRole("Admin");
     private readonly EduMindDbContext _db;
-    private readonly IWebHostEnvironment _environment;
+    private readonly LearningApiAccess _learningAccess;
 
-    public QuizAttemptsController(EduMindDbContext db, IWebHostEnvironment environment)
+    public QuizAttemptsController(EduMindDbContext db, LearningApiAccess learningAccess)
     {
         _db = db;
-        _environment = environment;
+        _learningAccess = learningAccess;
     }
 
-    private bool IsDemo => _environment.IsDevelopment();
 
     [HttpPost("/api/quizzes/{quizId:int}/attempts")]
     public async Task<IActionResult> Start(int quizId, CancellationToken ct)
     {
-        if (!IsDemo) return StatusCode(403, new { message = "Development only." });
+        if (!_learningAccess.Enabled) return StatusCode(403, new { message = "Learning API chua duoc bat tren may chu." });
         if (quizId <= 0) return BadRequest(new { message = "quizId không hợp lệ." });
         if (!await _db.Quizzes.AnyAsync(q => q.Id == quizId &&
             (q.OwnerUserId == CurrentUserId || (IsAdmin && q.OwnerUserId != null)), ct))
@@ -68,7 +67,7 @@ public sealed class QuizAttemptsController : ControllerBase
     [HttpGet("/api/quizzes/{quizId:int}/attempts")]
     public async Task<IActionResult> History(int quizId, CancellationToken ct)
     {
-        if (!IsDemo) return StatusCode(403, new { message = "Development only." });
+        if (!_learningAccess.Enabled) return StatusCode(403, new { message = "Learning API chua duoc bat tren may chu." });
         if (!await _db.Quizzes.AnyAsync(q => q.Id == quizId &&
             (q.OwnerUserId == CurrentUserId || (IsAdmin && q.OwnerUserId != null)), ct))
             return NotFound(new { message = "Không tìm thấy đề thi." });
@@ -87,7 +86,7 @@ public sealed class QuizAttemptsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id, CancellationToken ct)
     {
-        if (!IsDemo) return StatusCode(403, new { message = "Development only." });
+        if (!_learningAccess.Enabled) return StatusCode(403, new { message = "Learning API chua duoc bat tren may chu." });
         var attempt = await _db.QuizAttempts.AsNoTracking()
             .Include(a => a.Quiz).ThenInclude(q => q!.Document)
             .FirstOrDefaultAsync(a => a.Id == id && a.OwnerUserId == CurrentUserId, ct);
@@ -133,7 +132,7 @@ public sealed class QuizAttemptsController : ControllerBase
     public async Task<IActionResult> Submit(int id, [FromBody] SubmitQuizAttemptRequest request,
         CancellationToken ct)
     {
-        if (!IsDemo) return StatusCode(403, new { message = "Development only." });
+        if (!_learningAccess.Enabled) return StatusCode(403, new { message = "Learning API chua duoc bat tren may chu." });
         if (request?.Answers is null)
             return BadRequest(new { message = "Danh sách answers không hợp lệ." });
         if (request.Answers.Count > 100)

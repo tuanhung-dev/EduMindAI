@@ -67,11 +67,11 @@ export function getQuiz(id: number): Promise<QuizDetail> {
 }
 
 export function generateQuiz(documentId: number, questionCount: 5 | 10,
-  difficulty: QuizDifficulty): Promise<GenerateQuizResult> {
+  difficulty: QuizDifficulty, topic = ""): Promise<GenerateQuizResult> {
   return apiJson<GenerateQuizResult>("/api/quizzes/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ documentId, questionCount, difficulty }),
+    body: JSON.stringify({ documentId, questionCount, difficulty, topic }),
   });
 }
 

@@ -1,0 +1,53 @@
+/* FE-011 — Tài khoản/cài đặt EduMindAI */
+.eac-page { max-width: 1380px; margin: 0 auto; padding: 0 0 30px; color: #224332; }
+.eac-page * { box-sizing: border-box; }
+.eac-page :is(a,button,input,textarea):focus-visible { outline: 3px solid #8bd0ae; outline-offset: 2px; }
+.eac-page a { text-decoration: none; }
+.eac-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-radius: 24px; padding: clamp(24px,4vw,44px); background: linear-gradient(115deg,#153f30,#117354); color: white; overflow: hidden; }
+.eac-eyebrow { color: #b9efd0; letter-spacing: 1.5px; font-size: 10px; font-weight: 850; }
+.eac-hero h1 { color: white; font-size: clamp(27px,3vw,40px); margin: 13px 0; letter-spacing: -1px; }
+.eac-hero p { color: #d9f1e2; font-size: 13px; line-height: 1.7; margin: 0; max-width: 540px; }
+.eac-back { color: #195f45 !important; background: white; padding: 11px 16px; border-radius: 11px; font-size: 12px; font-weight: 800; display: inline-flex; margin-top: 22px; }
+.eac-hero-portrait { flex: none; display: grid; place-items: center; height: 146px; width: 146px; border-radius: 50%; background: #ffffff23; border: 2px solid #ffffff7c; color: #fff; font-size: 51px; font-weight: 850; box-shadow: 0 0 0 22px #ffffff12; }
+.eac-content { display: grid; grid-template-columns: minmax(230px,.69fr) minmax(0,1.4fr); gap: 18px; align-items: start; margin-top: 22px; }
+.eac-summary, .eac-panel, .eac-settings-main { min-width: 0; background: white; border: 1px solid #e0ece3; border-radius: 19px; box-shadow: 0 8px 22px #163c2407; }
+.eac-summary { padding: 26px; display: flex; flex-direction: column; align-items: flex-start; }
+.eac-avatar { height: 67px; width: 67px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 900; margin-bottom: 16px; }
+.eac-avatar--forest { background: #dcf2e4; color: #146445; }
+.eac-avatar--mint { background: #c7f5e4; color: #12675d; }
+.eac-avatar--sky { background: #dbeefa; color: #285f8b; }
+.eac-summary h2 { font-size: 20px; color: #234c36; margin: 0 0 7px; overflow-wrap: anywhere; }
+.eac-email { font-size: 12px; color: #799080; overflow-wrap: anywhere; margin: 0 0 13px; }
+.eac-role { color: #177b58; background: #eaf8ee; font-size: 11px; padding: 7px 11px; font-weight: 800; border-radius: 30px; }
+.eac-goal { border-top: 1px solid #e5efe7; padding-top: 18px; margin-top: 22px; width: 100%; }
+.eac-goal strong { font-size: 12px; color: #2d5f43; }
+.eac-goal p { font-size: 12px; line-height: 1.6; color: #6d8575; overflow-wrap: anywhere; }
+.eac-local-note { font-size: 11px; color: #85978b; line-height: 1.75; margin-top: 20px; }
+.eac-settings-main { padding: 15px; }
+.eac-tabs { display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid #e9f0e9; padding: 0 0 13px; }
+.eac-tabs button { cursor: pointer; min-height: 40px; border: 1px solid transparent; background: transparent; border-radius: 10px; padding: 10px 14px; font: inherit; font-size: 12px; font-weight: 800; color: #688370; }
+.eac-tabs button.active { border-color: #d4eddd; color: #167855; background: #edf8f0; }
+.eac-panel { border: 0; box-shadow: none; padding: 20px 10px 10px; }
+.eac-panel-head > span { font-size: 10px; font-weight: 850; letter-spacing: 1.25px; color: #1f8963; }
+.eac-panel-head h2 { font-size: 22px; margin: 8px 0; color: #204a35; }
+.eac-panel-head p { font-size: 12px; margin: 0 0 24px; line-height: 1.65; color: #819184; }
+.eac-form { display: grid; gap: 17px; max-width: 650px; }
+.eac-field { display: grid; gap: 8px; min-width: 0; }
+.eac-field label, .eac-colors legend { font-size: 12px; font-weight: 800; color: #345942; }
+.eac-field input, .eac-field textarea { width: 100%; color: #214a34; background: #fbfdfb; border: 1px solid #d6e7d9; border-radius: 11px; min-height: 45px; padding: 12px 14px; font: inherit; font-size: 13px; resize: vertical; }
+.eac-field input:disabled { color: #7f9186; background: #f4f7f4; cursor: not-allowed; }
+.eac-field small { font-size: 10px; color: #849789; }
+.eac-colors { border: 0; padding: 0; margin: 4px 0; }
+.eac-colors-list { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.eac-colors-list label { display: flex; gap: 9px; align-items: center; cursor: pointer; background: #f9fbf9; border: 1px solid #e2ebe2; padding: 8px 11px; border-radius: 12px; font-size: 11px; color: #4a6955; }
+.eac-colors-list label.selected { border-color: #79c69d; background: #f0faf2; }
+.eac-color-dot { width: 29px; height: 29px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; }
+.eac-show-password { display: flex; gap: 9px; align-items: center; cursor: pointer; font-size: 12px; color: #5c755f; }
+.eac-message { font-size: 12px; line-height: 1.6; padding: 12px 15px; border-radius: 11px; margin: 0; }
+.eac-message-success { background: #eaf9ef; color: #18734f; }
+.eac-message-error { background: #fff2f0; color: #a44336; }
+.eac-save { justify-self: start; border: none; border-radius: 11px; min-height: 45px; background: #147a5a; color: white; font-size: 12px; font-weight: 850; padding: 11px 22px; cursor: pointer; }
+.eac-save:hover { background: #0c6348; }
+.eac-save:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 880px) { .eac-content { grid-template-columns: 1fr; } .eac-summary { align-items: center; text-align: center; } }
+@media (max-width: 550px) { .eac-hero { padding: 26px 20px; border-radius: 17px; } .eac-hero-portrait { display: none; } .eac-content { gap: 13px; } .eac-summary { padding: 20px; } .eac-settings-main { padding: 12px; } .eac-panel { padding: 18px 6px 8px; } .eac-tabs button { flex: 1; padding: 10px; } .eac-save { width: 100%; } }

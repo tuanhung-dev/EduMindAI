@@ -7,16 +7,22 @@ export interface AiSource {
   pageNumber: number;
   chunkIndex: number;
   excerpt: string;
+  documentId?: number;
+  documentName?: string;
+  citation?: string;
 }
 
 export interface AiAnswer {
   documentId?: number;
   question?: string;
   answer: string;
+  chatId?: number;
   sources: AiSource[];
 }
 
 export interface AiSummary {
+  id?: number;
+  createdAtUtc?: string;
   documentId: number;
   level: "short" | "detailed";
   summary: string;
@@ -73,11 +79,11 @@ export async function indexDocument(documentId: number): Promise<IndexResult> {
   return (await response.json()) as IndexResult;
 }
 
-export async function askDocument(documentId: number, question: string): Promise<AiAnswer> {
+export async function askDocument(documentId: number, question: string, chatId?: number | null, documentIds?: number[]): Promise<AiAnswer> {
   const response = await authenticatedFetch(`${API_URL}/api/ai/ask`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ documentId, question }),
+    body: JSON.stringify({ documentId, question, chatId: chatId ?? null, documentIds }),
   });
   await requireOk(response);
   const payload: unknown = await response.json();
@@ -89,6 +95,49 @@ export async function askDocument(documentId: number, question: string): Promise
     throw new Error("API chưa trả về nội dung câu trả lời.");
   }
   return { ...data, answer: data.answer, sources: Array.isArray(data.sources) ? data.sources : [] };
+}
+
+
+/** A6: POST + Bearer token + incremental SSE, cancellable with AbortController. */
+export async function streamAskDocument(
+  documentId: number, question: string, chatId: number | null, documentIds: number[],
+  onDelta: (text: string) => void, signal: AbortSignal,
+): Promise<AiAnswer> {
+  const response = await authenticatedFetch(`${API_URL}/api/ai/ask/stream`, {
+    method: "POST", headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+    body: JSON.stringify({ documentId, question, chatId, documentIds }), signal,
+  });
+  await requireOk(response);
+  if (!response.body) throw new Error("Trình duyệt không hỗ trợ luồng phản hồi.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed: AiAnswer | null = null;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      let separator = buffer.indexOf("\n\n");
+      while (separator !== -1) {
+        const frame = buffer.slice(0, separator).replace(/\r/g, "");
+        buffer = buffer.slice(separator + 2);
+        const lines = frame.split("\n");
+        const event = lines.find(line => line.startsWith("event: "))?.slice(7) ?? "";
+        const data = lines.filter(line => line.startsWith("data: ")).map(line => line.slice(6)).join("\n");
+        if (data) {
+          const payload = JSON.parse(data) as Record<string, unknown>;
+          if (event === "delta" && typeof payload.text === "string") onDelta(payload.text);
+          if (event === "error") throw new Error(typeof payload.message === "string" ? payload.message : "AI gặp lỗi khi tạo câu trả lời.");
+          if (event === "done") completed = payload as unknown as AiAnswer;
+        }
+        separator = buffer.indexOf("\n\n");
+      }
+      if (done) break;
+    }
+  } finally { reader.releaseLock(); }
+  if (!completed || typeof completed.answer !== "string")
+    throw new Error("Luồng AI bị ngắt; câu trả lời chưa được lưu.");
+  return completed;
 }
 
 export function getPdfAtPage(documentId: number, pageNumber: number): string {
@@ -114,4 +163,40 @@ export async function summarizeDocument(
     throw new Error("API tóm tắt trả về dữ liệu không hợp lệ.");
   }
   return data as AiSummary;
+}
+
+// Buoc 21.2: lich su tom tat theo tai lieu va tai khoan.
+export interface SavedSummaryItem {
+  id: number;
+  documentId: number;
+  level: "short" | "detailed";
+  createdAtUtc: string;
+  isPartial: boolean;
+  totalChunks: number;
+  sampledChunks: number;
+}
+
+export async function getSavedSummaries(documentId: number): Promise<SavedSummaryItem[]> {
+  const response = await authenticatedFetch(`${API_URL}/api/documents/${documentId}/summaries`);
+  await requireOk(response);
+  const result: unknown = await response.json();
+  if (!Array.isArray(result)) throw new Error("Lich su tom tat tra ve khong hop le.");
+  return result as SavedSummaryItem[];
+}
+
+export async function getSavedSummary(documentId: number, summaryId: number): Promise<AiSummary> {
+  const response = await authenticatedFetch(`${API_URL}/api/documents/${documentId}/summaries/${summaryId}`);
+  await requireOk(response);
+  const data: unknown = await response.json();
+  if (!data || typeof data !== "object" || typeof (data as AiSummary).summary !== "string") {
+    throw new Error("Ban tom tat da luu khong hop le.");
+  }
+  return data as AiSummary;
+}
+
+export async function deleteSavedSummary(documentId: number, summaryId: number): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/api/documents/${documentId}/summaries/${summaryId}`, {
+    method: "DELETE",
+  });
+  await requireOk(response);
 }
