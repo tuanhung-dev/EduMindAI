@@ -21,6 +21,7 @@ export interface StudyDay {
   documentId: number;
   documentName: string;
   tasks: StudyTask[];
+  focusReason?: string;
 }
 
 export interface StudyPriority {
@@ -32,6 +33,27 @@ export interface StudyPriority {
   submittedQuizzes: number;
   latestScorePercent: number | null;
   wrongAnswersLast30Days: number;
+  trendDeltaPoints?: number | null;
+  riskLevel?: "prepare" | "high" | "medium" | "low";
+  recommendedAction?: string;
+}
+
+export interface StudyPlanInsights {
+  totalDocuments: number;
+  readyDocuments: number;
+  weakDocuments: number;
+  completedTasksLast7Days: number;
+  activeDaysLast7Days: number;
+  streakDays: number;
+  averageScoreLast3: number | null;
+  previousAverageScore3: number | null;
+  scoreTrendPoints: number | null;
+  nextStep: string;
+}
+
+export interface StudyHistoryDay {
+  date: string;
+  completedTasks: number;
 }
 
 export interface StudyPlan {
@@ -44,6 +66,8 @@ export interface StudyPlan {
   priorities: StudyPriority[];
   schedule: StudyDay[];
   note: string;
+  insights?: StudyPlanInsights | null;
+  history?: StudyHistoryDay[];
 }
 
 async function requestJson(path: string, init?: RequestInit): Promise<unknown> {

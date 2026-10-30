@@ -1,0 +1,209 @@
+/* EduMind AI — Bước 29. Chỉ áp dụng khi Layout dùng class ux29-layout.
+   Giữ nguyên CSS trang Bước 26–28 và không thêm thư viện ngoài. */
+.app-layout.ux29-layout {
+  --ux29-violet: #6550cd;
+  --ux29-ink: #29324b;
+  --ux29-border: #e9eaf2;
+  --ux29-focus: #5e46c8;
+  background: #f7f8fc;
+}
+.app-layout.ux29-layout .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 24px 15px 18px;
+  box-shadow: 2px 0 20px rgb(31 35 71 / 2%);
+}
+.app-layout.ux29-layout .brand { margin-bottom: 28px; padding: 0 5px; }
+.app-layout.ux29-layout .brand h2 { color: #2b3146; font-size: 19px; }
+.app-layout.ux29-layout .brand-logo { flex: none; }
+.app-layout.ux29-layout .menu-label { margin-bottom: 10px; }
+.app-layout.ux29-layout .sidebar-menu {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #dbd7ef transparent;
+  padding: 0 4px 12px 0;
+  align-items: stretch;
+}
+.app-layout.ux29-layout .menu-item {
+  min-height: 43px;
+  padding: 10px 13px;
+  font-size: 13px;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+.app-layout.ux29-layout .menu-item.active { border-left: 3px solid #6d55d6; padding-left: 10px; }
+.app-layout.ux29-layout .menu-item:focus-visible,
+.app-layout.ux29-layout button:focus-visible,
+.app-layout.ux29-layout a:focus-visible,
+.app-layout.ux29-layout input:focus-visible,
+.app-layout.ux29-layout select:focus-visible,
+.app-layout.ux29-layout textarea:focus-visible {
+  outline: 3px solid var(--ux29-focus);
+  outline-offset: 2px;
+}
+.app-layout.ux29-layout .sidebar-bottom { padding-top: 12px; }
+.app-layout.ux29-layout .ai-promo { padding: 15px; }
+.app-layout.ux29-layout .ai-promo h3 { margin: 7px 0; font-size: 15px; }
+.app-layout.ux29-layout .ai-promo p { margin: 0; font-size: 11px; }
+.app-layout.ux29-layout .copyright { margin-top: 12px; }
+.app-layout.ux29-layout .main-area { min-width: 0; }
+.app-layout.ux29-layout .topbar {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  min-height: 76px;
+  height: auto;
+  padding: 14px 30px;
+  gap: 16px;
+}
+.ux29-heading-group { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ux29-breadcrumbs { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+.ux29-breadcrumbs strong { color: var(--ux29-ink); font-size: 14px; }
+.ux29-user-group { min-width: 0; gap: 11px; }
+.ux29-user-group .environment-tag { white-space: nowrap; }
+.ux29-email { color: #637087; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.ux29-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  min-height: 39px;
+  border: 1px solid #e3def6;
+  background: #fff;
+  color: #5542af;
+  padding: 8px 11px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ux29-logout:hover { background: #f5f1ff; }
+.ux29-menu-toggle, .ux29-close { display: none; }
+.ux29-menu-group-label { display: block; padding: 14px 12px 5px; font-size: 10px; font-weight: 800; letter-spacing: .7px; color: #939aaf; }
+.app-layout.ux29-layout .page-container { max-width: 1500px; padding: 26px 30px 44px; }
+.app-layout.ux29-layout .page-container img,
+.app-layout.ux29-layout .page-container video { max-width: 100%; }
+.app-layout.ux29-layout .page-container input,
+.app-layout.ux29-layout .page-container select,
+.app-layout.ux29-layout .page-container textarea { max-width: 100%; }
+.ux29-skip-link {
+  position: fixed;
+  top: -100px;
+  left: 15px;
+  z-index: 200;
+  border-radius: 9px;
+  background: #211745;
+  color: white;
+  padding: 12px 16px;
+  text-decoration: none;
+  font-weight: 700;
+}
+.ux29-skip-link:focus { top: 10px; }
+.ux29-backdrop { display: none; }
+.ux29-page-error {
+  margin: 10vh auto 0;
+  max-width: 560px;
+  padding: 34px;
+  border: 1px solid #eadce4;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgb(36 27 74 / 6%);
+}
+.ux29-error-icon { display: grid; place-items: center; width: 45px; height: 45px; border-radius: 13px; background: #fff0f0; color: #bc3a4a; font-weight: 800; font-size: 26px; }
+.ux29-page-error h1 { font-size: clamp(20px, 3vw, 26px); color: #28324d; margin: 20px 0 10px; }
+.ux29-page-error p { font-size: 14px; line-height: 1.7; color: #748095; }
+.ux29-error-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.ux29-error-actions button, .ux29-error-actions a { min-height: 42px; border-radius: 10px; padding: 11px 15px; font-weight: 700; font-size: 13px; text-decoration: none; }
+.ux29-error-actions button { border: 0; background: var(--ux29-violet); color: #fff; }
+.ux29-error-actions a { border: 1px solid #e6e3f0; color: #5847a6; background: white; }
+
+@media (max-height: 780px) and (min-width: 901px) {
+  .app-layout.ux29-layout .ai-promo { display: none; }
+}
+@media (max-width: 1180px) {
+  .ux29-email { max-width: 120px; }
+  .app-layout.ux29-layout .page-container { padding: 24px; }
+}
+/* Thay menu ngang tràn trên điện thoại của App.css cũ bằng drawer có nút mở rõ ràng. */
+@media (max-width: 900px) {
+  .app-layout.ux29-layout { display: block; }
+  .app-layout.ux29-layout .sidebar.ux29-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    width: min(315px, calc(100vw - 44px));
+    padding: 20px 16px;
+    z-index: 50;
+    transform: translateX(-104%);
+    transition: transform .22s ease, visibility .22s;
+    visibility: hidden;
+    pointer-events: none;
+    box-shadow: 15px 0 50px rgb(22 22 53 / 15%);
+  }
+  .app-layout.ux29-layout .sidebar.ux29-sidebar.ux29-sidebar-open {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .app-layout.ux29-layout .sidebar-menu { flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+  .app-layout.ux29-layout .menu-item { white-space: normal; padding: 11px 13px; }
+  .app-layout.ux29-layout .menu-label { display: block; }
+  .app-layout.ux29-layout .sidebar-bottom { display: none; }
+  .app-layout.ux29-layout .brand { margin-bottom: 26px; }
+  .ux29-backdrop { display: block; position: fixed; inset: 0; z-index: 40; width: 100%; height: 100%; border: 0; border-radius: 0; padding: 0; background: rgb(17 19 39 / 55%); cursor: pointer; }
+  .ux29-menu-toggle, .ux29-close { display: inline-grid; place-items: center; flex: none; width: 40px; height: 40px; border: 1px solid #e5e3ed; border-radius: 11px; background: #fff; color: #5844b0; font-size: 22px; line-height: 1; }
+  .ux29-close { margin-left: auto; font-size: 29px; }
+  .app-layout.ux29-layout .topbar { padding: 12px 18px; min-height: 66px; }
+  .app-layout.ux29-layout .page-container { padding: 20px 18px 36px; }
+  .ux29-email { max-width: 150px; }
+}
+@media (max-width: 560px) {
+  .app-layout.ux29-layout .topbar { gap: 8px; }
+  .ux29-breadcrumbs .breadcrumb { display: none; }
+  .ux29-breadcrumbs strong { font-size: 12px; line-height: 1.4; }
+  .ux29-user-group .environment-tag, .ux29-email { display: none; }
+  .ux29-user-group { gap: 8px; }
+  .ux29-user-group .avatar { width: 34px; height: 34px; }
+  .ux29-logout { min-height: 37px; padding: 7px 9px; }
+  .ux29-logout span:last-child { display: none; }
+  .app-layout.ux29-layout .page-container { padding: 16px 12px 30px; }
+  .ux29-page-error { margin-top: 20px; padding: 22px; }
+}
+@media (max-width: 365px) {
+  .ux29-user-group .avatar { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-layout.ux29-layout .sidebar.ux29-sidebar { transition: none; }
+  .app-layout.ux29-layout .menu-item { transition: none; }
+}
+
+/* Trạng thái kiểm tra phiên đăng nhập trước khi có AppLayout. */
+.ux29-auth-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 30px;
+  text-align: center;
+  color: #3a315f;
+  background: #f7f8fc;
+}
+.ux29-auth-loading strong { font-size: 17px; }
+.ux29-auth-loading p { max-width: 340px; color: #7d849a; font-size: 13px; line-height: 1.5; margin: 0; }
+.ux29-spinner { width: 38px; height: 38px; border: 4px solid #e4dff9; border-top-color: #6650c9; border-radius: 50%; animation: ux29-spin .85s linear infinite; margin-bottom: 13px; }
+@keyframes ux29-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ux29-spinner { animation: none; border-top-color: #6650c9; } }

@@ -161,8 +161,10 @@ public sealed class DocumentRetrievalService
         return arr.EnumerateArray().Select(row => row.EnumerateArray().Select(v => v.GetSingle()).ToArray()).ToArray();
     }
 
-    private static RagChunk[] Diversity(IEnumerable<RagChunk> ranked)
+    private RagChunk[] Diversity(IEnumerable<RagChunk> ranked)
     {
+        // Configurable source count; more sources are not always better, so cap at 10.
+        int maxSources = Math.Clamp(_configuration.GetValue("Rag:MaxSources", 8), 4, 10);
         var picked = new List<RagChunk>();
         var sourceCounts = new Dictionary<int, int>();
         var pageCounts = new Dictionary<(int, int), int>();
@@ -174,9 +176,9 @@ public sealed class DocumentRetrievalService
             pageCounts.TryGetValue((did, c.PageNumber), out var pc);
             string norm = Normalize(c.Content);
             string key = did + ":" + norm[..Math.Min(160, norm.Length)];
-            if (dc >= 4 || pc >= 2 || !fingerprints.Add(key)) continue;
+            if (dc >= maxSources || pc >= 2 || !fingerprints.Add(key)) continue;
             picked.Add(c); sourceCounts[did] = dc + 1; pageCounts[(did, c.PageNumber)] = pc + 1;
-            if (picked.Count >= 6) break;
+            if (picked.Count >= maxSources) break;
         }
         return picked.ToArray();
     }

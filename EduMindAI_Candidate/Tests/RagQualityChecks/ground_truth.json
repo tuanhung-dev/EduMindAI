@@ -1,0 +1,12 @@
+[
+  {
+    "question": "THAY BẰNG CÂU HỎI THỰC SỰ có đáp án trong PDF/Word của bạn",
+    "expectedAnyPage": [1],
+    "notes": "Ghi số trang PDF thật hoặc số phần Word đúng sau khi tự đọc tài liệu"
+  },
+  {
+    "question": "THAY BẰNG CÂU HỎI THỨ HAI về nội dung khác trong tài liệu",
+    "expectedAnyPage": [2],
+    "notes": "Đây chỉ là mẫu, không phải kết quả đánh giá thực tế"
+  }
+]

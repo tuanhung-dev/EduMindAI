@@ -13,6 +13,7 @@ import "./AiTutorPage.css";
 import "./RagGroupA.css";
 import "./AiTutorChatGPT.css";
 import "./AiTutorUnified.css";
+import "./AiTutorSummaryV3.css";
 
 const prompts = [
   { icon: "✧", label: "Tóm lược các kiến thức chính", question: "Tài liệu này đề cập đến những nội dung chính nào?" },
@@ -54,6 +55,48 @@ function friendlyError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+type SummarySection = { title: string; body: string };
+
+function getSummarySections(text: string): SummarySection[] {
+  const result: SummarySection[] = [];
+  let title = "Mở đầu";
+  let lines: string[] = [];
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const heading = /^#{1,2}\s+(.+)$/.exec(line);
+    if (heading) {
+      if (lines.some(entry => entry.trim())) result.push({ title, body: lines.join("\n").trim() });
+      title = heading[1].replace(/\*\*/g, "").trim();
+      lines = [line];
+    } else {
+      lines.push(line);
+    }
+  }
+  if (lines.some(entry => entry.trim())) result.push({ title, body: lines.join("\n").trim() });
+  return result.length ? result : [{ title: "Nội dung tóm tắt", body: text }];
+}
+
+function SummaryReader({ text }: { text: string }) {
+  const sections = useMemo(() => getSummarySections(text), [text]);
+  const sectionRefs = useRef<Array<HTMLElement | null>>([]);
+  const [selected, setSelected] = useState(0);
+  return <div className="emsum-reader">
+    {sections.length > 1 && <nav className="emsum-toc" aria-label="Mục lục bản tóm tắt">
+      <strong>Trong bản tóm tắt</strong>
+      <div>{sections.map((item, index) => <button type="button" key={`${index}-${item.title}`}
+        className={selected === index ? "active" : ""}
+        onClick={() => { setSelected(index); sectionRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+        <span>{String(index + 1).padStart(2, "0")}</span>{item.title}
+      </button>)}</div>
+    </nav>}
+    <div className="emsum-reader-content">
+      {sections.map((item, index) => <section className="emsum-chapter" key={`${index}-${item.title}`}
+        ref={node => { sectionRefs.current[index] = node; }} aria-label={item.title}>
+        <TutorRichText text={item.body} />
+      </section>)}
+    </div>
+  </div>;
+}
+
 export default function AiTutorPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -61,7 +104,8 @@ export default function AiTutorPage() {
   const [mode, setMode] = useState<TutorMode>("ask");
   const [question, setQuestion] = useState("");
   const [additionalDocuments, setAdditionalDocuments] = useState<number[]>([]);
-  const [useStreaming, setUseStreaming] = useState(true);
+  // Prefer the reliable JSON endpoint until streaming works on this machine.
+  const [useStreaming, setUseStreaming] = useState(false);
   const stopStreamRef = useRef<AbortController | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [chatSessions, setChatSessions] = useState<AiChatSession[]>([]);
@@ -81,7 +125,10 @@ export default function AiTutorPage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const sourceTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [summary, setSummary] = useState<AiSummary | null>(null);
-  const [summaryLevel, setSummaryLevel] = useState<"short" | "detailed">("short");
+  const [summaryLevel, setSummaryLevel] = useState<"short" | "detailed">("detailed");
+  const [summaryHistoryFilter, setSummaryHistoryFilter] = useState<"all" | "short" | "detailed">("all");
+  const [summarySourcesOpen, setSummarySourcesOpen] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [savedSummaries, setSavedSummaries] = useState<SavedSummaryItem[]>([]);
   const [historyForDocument, setHistoryForDocument] = useState<number | null>(null);
   const [indexing, setIndexing] = useState(false);
@@ -145,6 +192,18 @@ export default function AiTutorPage() {
     return Array.from(groups.entries());
   }, [chatSessions, chatGroup, chatSearch]);
   const activeSummary = summary?.documentId === documentId ? summary : null;
+
+  // Make long summaries readable without a fixed line or character limit in the UI.
+  useEffect(() => {
+    if (!summaryExpanded) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setSummaryExpanded(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [summaryExpanded]);
+
+  const summaryWordCount = useMemo(() => activeSummary?.summary.trim().split(/\s+/).filter(Boolean).length ?? 0, [activeSummary]);
 
   // Lịch sử tóm tắt và hội thoại được lưu ở Backend theo tài liệu.
   useEffect(() => {
@@ -249,6 +308,7 @@ export default function AiTutorPage() {
     setQuestion("");
     setAdditionalDocuments([]);
     setSummary(null);
+    setSummarySourcesOpen(false);
     setHistoryForDocument(null);
     setSavedSummaries([]);
     setError("");
@@ -300,6 +360,12 @@ export default function AiTutorPage() {
     } catch (err) {
       const message = controller.signal.aborted ? "Bạn đã dừng tạo câu trả lời; lượt này không được lưu." :
         friendlyError(err, "Gia sư AI không trả lời được. Bạn có thể thử lại.");
+      if (useStreaming && !controller.signal.aborted) {
+        // Don't retry automatically: a repeated AI call could incur cost, and
+        // a response saved just before a disconnect could be duplicated.
+        setUseStreaming(false);
+        setNotice("Luồng trả lời từng phần gặp lỗi; đã chuyển sang chế độ thường. Nhấn Thử lại để gửi lại câu hỏi.");
+      }
       setTurns(items => items.map(item => item.id === turnId ? { ...item, failure: message, partial: undefined } : item));
     } finally {
       stopStreamRef.current = null;
@@ -391,7 +457,7 @@ export default function AiTutorPage() {
     setError(""); setNotice(""); setSummarizing(true);
     try {
       const created = await summarizeDocument(documentId, summaryLevel);
-      setSummary(created);
+      setSummary(created); setSummarySourcesOpen(false); setSummaryExpanded(false);
       try {
         const items = await getSavedSummaries(documentId);
         setSavedSummaries(items); setHistoryForDocument(documentId);
@@ -406,7 +472,7 @@ export default function AiTutorPage() {
     setEditingHistory(true); setError(""); setNotice("");
     try {
       const result = await getSavedSummary(documentId, id);
-      setSummary(result); setSummaryLevel(result.level);
+      setSummary(result); setSummaryLevel(result.level); setSummarySourcesOpen(false); setSummaryExpanded(false);
       setNotice("Đã mở bản tóm tắt được lưu trong MySQL.");
     } catch (err) { setError(friendlyError(err, "Không thể mở bản tóm tắt.")); }
     finally { setEditingHistory(false); }
@@ -431,6 +497,21 @@ export default function AiTutorPage() {
     const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = `EduMindAI-TomTat-${documentId ?? "PDF"}.txt`;
+    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadSummaryMarkdown() {
+    if (!activeSummary) return;
+    const content = ["# EduMindAI — Ghi chú học tập",
+      `**Tài liệu:** ${selectedDocument?.originalFileName ?? "Tài liệu"}`,
+      `**Chế độ:** ${activeSummary.level === "detailed" ? "Tóm tắt chi tiết" : "Tóm tắt ngắn"}`,
+      `**Độ bao phủ:** ${activeSummary.coverage.sampledChunks}/${activeSummary.coverage.totalChunks} đoạn tham khảo`,
+      `**Lưu ý:** ${activeSummary.coverage.note}`, "", activeSummary.summary].join("\n\n");
+    const url = URL.createObjectURL(new Blob([content], { type: "text/markdown;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `EduMindAI-TomTat-${documentId ?? "tai-lieu"}.md`;
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -606,45 +687,96 @@ export default function AiTutorPage() {
                 </div>
                 <div className="emgpt-composer-right">
                   <span className="emgpt-char-count">{question.length}/500</span>
-                  {asking && useStreaming ? <button type="button" className="emgpt-send-btn" onClick={stopGeneration} aria-label="Dừng tạo câu trả lời" title="Dừng tạo">■</button>
+                  {asking ? <button type="button" className="emgpt-send-btn" onClick={stopGeneration} aria-label="Dừng tạo câu trả lời" title="Dừng tạo">■</button>
                     : <button type="submit" className="emgpt-send-btn" disabled={busy || !ready || question.trim().length < 3} aria-label="Gửi câu hỏi" title="Gửi câu hỏi">↑</button>}
                 </div>
               </div>
             </form>
             <div className="emgpt-composer-footer"><label><input type="checkbox" checked={useStreaming} disabled={asking} onChange={e => setUseStreaming(e.target.checked)} /> Trả lời từng phần</label><span>Enter để gửi · Shift+Enter xuống dòng · AI có thể mắc lỗi, hãy kiểm tra nguồn.</span></div>
           </div>
-        </> : <div className="em30-summary-scroll">
-          <div className="em30-summary-heading"><span className="em30-kicker">CHẾ ĐỘ TÓM TẮT</span><h2>Biến tài liệu thành ghi chú dễ học</h2>
-            <p>Chọn độ dài tóm tắt, tạo bản mới hoặc mở lại bản đã lưu từ MySQL.</p></div>
-          <div className="em30-summary-controls">
-            <div><label className="em30-label" htmlFor="em30-level">Độ dài ghi chú</label>
-              <select id="em30-level" className="em30-select" disabled={busy} value={summaryLevel} onChange={e => setSummaryLevel(e.target.value as "short" | "detailed")}>
-                <option value="short">Ngắn gọn · Ý chính</option><option value="detailed">Chi tiết · Ôn tập sâu</option>
-              </select></div>
-            <button type="button" className="em30-primary" onClick={handleSummarize} disabled={busy || !ready}>{summarizing ? "Đang tạo tóm tắt…" : "✦ Tạo bản tóm tắt mới"}</button>
+        </> : <div className="em30-summary-scroll emsum-workspace">
+          <div className="emsum-intro">
+            <span className="em30-kicker">GIA SƯ AI · GHI CHÚ THÔNG MINH</span>
+            <h2>Đọc nhanh nội dung, hiểu rõ toàn bộ ý chính.</h2>
+            <p>Bản ngắn giúp nắm nội dung nhanh; bản chi tiết diễn giải từng phần của tài liệu theo thứ tự, không thêm câu hỏi ôn tập.</p>
+            <div className="emsum-intro-meta"><span>▤ Dựa trên tài liệu đã lập chỉ mục</span><span>◷ Lưu lịch sử trong MySQL</span><span>✧ Có nguồn để đối chiếu</span></div>
           </div>
-          {summarizing && <div className="em30-thinking" role="status">AI đang đọc và tổng hợp nội dung. Với tài liệu dài, quá trình này có thể mất vài phút.</div>}
-          <section className="em30-history"><div className="em30-section-title"><h3>◷ Lịch sử tóm tắt</h3><span>{historyForDocument === documentId ? savedSummaries.length : 0} bản</span></div>
-            {historyForDocument !== documentId ? <p className="em30-muted">Đang tải lịch sử…</p> : savedSummaries.length === 0 ? <p className="em30-muted">Chưa có bản tóm tắt nào cho tài liệu này.</p>
-            : <ul>{savedSummaries.map(item => <li key={item.id}>
-              <div><strong>{item.level === "short" ? "Tóm tắt ngắn gọn" : "Tóm tắt chi tiết"}</strong><small>{humanDate(item.createdAtUtc)} {item.isPartial ? "· Một phần tài liệu" : ""}</small></div>
-              <div className="em30-history-actions"><button type="button" disabled={busy} onClick={() => void openSavedSummary(item.id)}>Xem lại</button>
-                <button type="button" className="danger" disabled={busy} onClick={() => void removeSavedSummary(item.id)}>Xóa</button></div>
-            </li>)}</ul>}
+          <section className="emsum-create-card" aria-label="Tạo bản tóm tắt">
+            <div className="emsum-create-head"><div><h3>Chọn mức độ tóm tắt</h3><p>Chế độ chi tiết có thể tạo bài đọc dài, chia nhiều phần để không bị giới hạn ở một lần tổng hợp ngắn.</p></div>
+              <span className="emsum-choice-status">{summaryLevel === "detailed" ? "Phân tích sâu" : "Đọc nhanh"}</span>
+            </div>
+            <div className="emsum-mode-grid" role="group" aria-label="Mức độ tóm tắt">
+              <button type="button" className={`emsum-mode-card ${summaryLevel === "short" ? "is-selected" : ""}`}
+                aria-pressed={summaryLevel === "short"} disabled={busy} onClick={() => setSummaryLevel("short")}>
+                <span className="emsum-mode-icon">≡</span><strong>Ngắn gọn</strong><small>Tổng quan, các ý quan trọng và kết luận dễ hiểu. Không có câu hỏi ôn tập.</small><em>Đọc nhanh nội dung</em>
+              </button>
+              <button type="button" className={`emsum-mode-card ${summaryLevel === "detailed" ? "is-selected" : ""}`}
+                aria-pressed={summaryLevel === "detailed"} disabled={busy} onClick={() => setSummaryLevel("detailed")}>
+                <span className="emsum-mode-icon">✦</span><strong>Chi tiết · Đọc đầy đủ</strong><small>Diễn giải theo từng phần, giữ lại định nghĩa, luận điểm, công thức, ví dụ và mối liên hệ có trong nguồn.</small><em>Bản đọc dài, không tạo câu hỏi</em>
+              </button>
+            </div>
+            <div className="emsum-create-foot">
+              <span className="emsum-file-label" title={selectedDocument?.originalFileName}>{selectedDocument?.originalFileName ?? "Chưa chọn tài liệu"}</span>
+              <button type="button" className="em30-primary emsum-generate" onClick={() => void handleSummarize()} disabled={busy || !ready}>
+                {summarizing ? "✦ Đang tóm tắt từng phần…" : "✦ Tạo bản tóm tắt mới"}
+              </button>
+            </div>
+            <p className="emsum-cost-hint">Bản chi tiết mở rộng phạm vi nguồn và ghép nhiều phần, không cắt lại toàn bài ở bước cuối. Tài liệu dài có thể xử lý lâu; OpenAI API có thể phát sinh phí theo mỗi lượt gọi, còn Ollama local không thu phí token API.</p>
+            {!ready && <p className="emsum-help" role="status">Tài liệu chưa ở trạng thái Ready. Hãy <button type="button" onClick={() => setDocumentPanelOpen(true)}>mở nguồn tài liệu</button> và xử lý trước khi tóm tắt.</p>}
+            {summarizing && <div className="emsum-progress" role="status"><span className="emsum-spinner" aria-hidden="true" /><div><strong>AI đang đọc và tóm tắt lần lượt từng phần</strong><p>Bản chi tiết có thể cần nhiều lượt gọi model. Hãy giữ trang mở cho đến khi hoàn thành; nếu lỗi, bạn có thể tạo lại.</p></div></div>}
           </section>
-          {activeSummary ? <article className="em30-summary-result" aria-live="polite">
-            <div className="em30-section-title"><h3>✦ Nội dung tóm tắt {activeSummary.id ? `#${activeSummary.id}` : ""}</h3>
-              <div className="em30-summary-result-actions"><button type="button" onClick={() => void copyContent(activeSummary.summary)}>▢ Sao chép</button><button type="button" onClick={downloadSummary}>↓ Tải .txt</button></div></div>
-            {activeSummary.coverage.isPartial && <div className="em30-alert em30-alert-warning">Bản tóm tắt dùng {activeSummary.coverage.sampledChunks}/{activeSummary.coverage.totalChunks} đoạn, không bao phủ toàn bộ tài liệu.</div>}
-            <div className="em30-summary-text">{activeSummary.summary}</div>
-            <p className="em30-muted">{activeSummary.coverage.note}</p>
-            <section className="em30-sources"><h3>▤ Những đoạn tài liệu được sử dụng <span>{activeSummary.sources.length}</span></h3>
-              <div className="em30-sources-list">{activeSummary.sources.map((source, i) => <div className="em30-source" key={`${source.pageNumber}-${source.chunkIndex}-${i}`}>
-                <div className="em30-source-top"><strong>{sourceLabel} {source.pageNumber} · Đoạn {source.chunkIndex + 1}</strong>
-                  <button className="emc-open-source" type="button" onClick={e => openSource({ ...source, documentId: documentId! }, e.currentTarget)}>{isWord ? "Xem đoạn Word" : "Xem cạnh tóm tắt"} ↗</button></div>
-                <p>{source.excerpt}</p></div>)}</div>
+          <section className="em30-history emsum-history">
+            <div className="em30-section-title"><h3>◷ Các bản tóm tắt đã lưu</h3><span>{historyForDocument === documentId ? savedSummaries.length : 0} bản</span></div>
+            <div className="emsum-history-toolbar" role="group" aria-label="Lọc lịch sử tóm tắt">
+              {(["all", "detailed", "short"] as const).map(filter => <button key={filter} type="button"
+                aria-pressed={summaryHistoryFilter === filter} className={summaryHistoryFilter === filter ? "active" : ""}
+                onClick={() => setSummaryHistoryFilter(filter)}>{filter === "all" ? "Tất cả" : filter === "detailed" ? "Chi tiết" : "Ngắn gọn"}</button>)}
+            </div>
+            {historyForDocument !== documentId ? <p className="em30-muted">Đang tải lịch sử…</p>
+            : savedSummaries.filter(item => summaryHistoryFilter === "all" || item.level === summaryHistoryFilter).length === 0
+              ? <p className="em30-muted">Chưa có bản tóm tắt nào trong bộ lọc này.</p>
+              : <ul>{savedSummaries.filter(item => summaryHistoryFilter === "all" || item.level === summaryHistoryFilter).map(item => <li key={item.id}>
+                <div><strong>{item.level === "short" ? "≡ Tóm tắt ngắn" : "✦ Tóm tắt chi tiết"}</strong>
+                  <small>{humanDate(item.createdAtUtc)} · {item.sampledChunks}/{item.totalChunks} đoạn {item.isPartial ? "· Giới hạn bao phủ" : ""}</small></div>
+                <div className="em30-history-actions"><button type="button" disabled={busy} onClick={() => void openSavedSummary(item.id)}>Mở lại</button>
+                  <button type="button" className="danger" disabled={busy} onClick={() => void removeSavedSummary(item.id)}>Xóa</button></div>
+              </li>)}</ul>}
+          </section>
+          {activeSummary ? <article className={`em30-summary-result emsum-result ${summaryExpanded ? "emsum-result-expanded" : ""}`} aria-live="polite">
+            <header className="emsum-result-head">
+              <div><span className="em30-kicker">BẢN GHI CHÚ ĐÃ TẠO {activeSummary.id ? `#${activeSummary.id}` : ""}</span>
+                <h3>{activeSummary.level === "detailed" ? "Tóm tắt chi tiết" : "Tóm tắt ngắn gọn"}</h3>
+                <p>Tổng hợp có cấu trúc dựa trên những đoạn tài liệu được chọn. Bấm nguồn bên dưới để kiểm chứng.</p></div>
+              <div className="em30-summary-result-actions"><button type="button" onClick={() => setSummaryExpanded(v => !v)} aria-pressed={summaryExpanded}>{summaryExpanded ? "✕ Đóng chế độ đọc" : "⤢ Đọc toàn màn hình"}</button><button type="button" onClick={() => void copyContent(activeSummary.summary)}>▢ Sao chép</button>
+                <button type="button" onClick={downloadSummaryMarkdown}>↓ Markdown</button>
+                <button type="button" onClick={downloadSummary}>↓ TXT</button></div>
+            </header>
+            <div className="emsum-metrics">
+              <div><strong>{summaryWordCount.toLocaleString("vi-VN")}</strong><span>Từ trong bản tóm tắt</span></div>
+              <div><strong>{activeSummary.coverage.sampledChunks}</strong><span>Đoạn tham khảo</span></div>
+              <div><strong>{activeSummary.coverage.pages?.length ?? 0}</strong><span>{isWord ? "Phần Word" : "Trang PDF"} tham khảo</span></div>
+              <div><strong>{activeSummary.sources.length}</strong><span>Nguồn có thể kiểm tra</span></div>
+              <div><strong>{activeSummary.coverage.isPartial ? "Một phần" : "Theo chỉ mục"}</strong><span>Phạm vi tổng hợp</span></div>
+            </div>
+            {activeSummary.coverage.isPartial && <div className="em30-alert em30-alert-warning emsum-coverage-warning" role="note">
+              <strong>Phạm vi tham khảo:</strong> Đã dùng {activeSummary.coverage.sampledChunks}/{activeSummary.coverage.totalChunks} đoạn đã lập chỉ mục. Một số phần có thể chưa được bao phủ hoặc bị rút ngắn; hãy đối chiếu tài liệu gốc.
+            </div>}
+            <SummaryReader key={activeSummary.id ?? `${activeSummary.documentId}-${activeSummary.level}`} text={activeSummary.summary} />
+            <p className="emsum-coverage-note">{activeSummary.coverage.note}</p>
+            <section className="em30-sources emsum-sources">
+              <button type="button" className="emsum-sources-toggle" aria-expanded={summarySourcesOpen} onClick={() => setSummarySourcesOpen(value => !value)}>
+                <span>▤ Đoạn tài liệu đã tham khảo <small>{activeSummary.sources.length} đoạn</small></span>
+                <span>{summarySourcesOpen ? "Thu gọn −" : "Xem nguồn +"}</span>
+              </button>
+              {summarySourcesOpen && <div className="em30-sources-list">
+                {activeSummary.sources.map((item, i) => <div className="em30-source" key={`${item.pageNumber}-${item.chunkIndex}-${i}`}>
+                  <div className="em30-source-top"><strong>{sourceLabel} {item.pageNumber} · Đoạn {item.chunkIndex + 1}</strong>
+                    <button className="emc-open-source" type="button" onClick={e => openSource({ ...item, documentId: documentId! }, e.currentTarget)}>{isWord ? "Đọc phần Word" : "Mở PDF tại trang"} ↗</button></div>
+                  <p>{item.excerpt}</p></div>)}
+              </div>}
             </section>
-          </article> : <div className="em30-summary-placeholder"><span aria-hidden="true">▤</span><strong>Ghi chú học tập sẽ xuất hiện tại đây</strong><p>Bản tóm tắt mới cũng được lưu vào lịch sử MySQL để bạn xem lại.</p></div>}
+          </article> : <div className="em30-summary-placeholder emsum-placeholder"><span aria-hidden="true">✦</span><strong>Bản tóm tắt của bạn sẽ hiển thị ở đây</strong>
+            <p>Chọn <b>Chi tiết</b> để đọc bản tóm tắt dài, chia thành nhiều phần, giữ lại các thông tin quan trọng mà không thêm câu hỏi ôn tập.</p></div>}
         </div> }
       </main>
 

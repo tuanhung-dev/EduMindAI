@@ -211,8 +211,34 @@ function FocusTimer() {
 
 export default function StudyPlanPage() {
   const { user } = useAuth();
-  const [planType, setPlanType] = useState<PlanType>("balanced");
-  const [minutes, setMinutes] = useState<DailyMinutes>(45);
+  const email = user?.email?.toLowerCase() ?? "guest";
+  // Remount per account to avoid applying a previous student's local preferences.
+  return <StudyPlanContent key={email} accountEmail={email} />;
+}
+
+function StudyPlanContent({ accountEmail }: { accountEmail: string }) {
+  const settingsKey = `edumind:study-settings:${encodeURIComponent(accountEmail)}`;
+  const [planType, setPlanType] = useState<PlanType>(() => {
+    try {
+      const value = JSON.parse(window.localStorage.getItem(settingsKey) || "null") as
+        { planType?: PlanType } | null;
+      return value?.planType && ["balanced", "understanding", "exam"].includes(value.planType)
+        ? value.planType : "balanced";
+    } catch { return "balanced"; }
+  });
+  const [minutes, setMinutes] = useState<DailyMinutes>(() => {
+    try {
+      const value = JSON.parse(window.localStorage.getItem(settingsKey) || "null") as
+        { minutes?: DailyMinutes } | null;
+      return value?.minutes && [30, 45, 60, 90].includes(value.minutes)
+        ? value.minutes : 45;
+    } catch { return 45; }
+  });
+  // Preferences are stored only in this browser; history and completion come from the API.
+  useEffect(() => {
+    try { window.localStorage.setItem(settingsKey, JSON.stringify({ planType, minutes })); }
+    catch { /* Non-critical local preference. */ }
+  }, [settingsKey, planType, minutes]);
   const [plan, setPlan] = useState<StudyPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -308,6 +334,7 @@ export default function StudyPlanPage() {
     setTaskError("");
     try {
       await updateStudyTask(day.date, day.documentId, kind, completed, minutes, planType);
+      // Reflect the successful write immediately, even if the subsequent GET fails.
       setPlan((current) => current ? {
         ...current,
         schedule: current.schedule.map((entry) =>
@@ -322,6 +349,13 @@ export default function StudyPlanPage() {
             : entry,
         ),
       } : current);
+      try {
+        // Re-fetch the server plan so streak and 7-day history update immediately.
+        // The backend pins today's document once a task has been completed.
+        setPlan(await getStudyPlan(minutes, planType));
+      } catch {
+        setTaskError("Đã lưu trạng thái nhưng chưa đồng bộ lại số liệu. Chọn Làm mới để cập nhật.");
+      }
     } catch (reason: unknown) {
       setTaskError(getError(reason, "Không thể lưu trạng thái nhiệm vụ."));
     } finally {
@@ -342,7 +376,7 @@ export default function StudyPlanPage() {
     }
   }
 
-  const noteKey = `edumind:study-note:${encodeURIComponent(user?.email?.toLowerCase() ?? "guest")}:${plan?.startDate ?? "today"}`;
+  const noteKey = `edumind:study-note:${encodeURIComponent(accountEmail)}:${plan?.startDate ?? "today"}`;
 
   return (
     <div className="elp-page">
@@ -422,6 +456,56 @@ export default function StudyPlanPage() {
           <div className="elp-stat elp-stat-highlight"><span className="elp-stat-icon">✓</span><span>Hoàn thành hôm nay</span><strong>{todayProgress.completed}/{todayProgress.total}</strong><small>{percentToday}% nhiệm vụ hôm nay</small><div className="elp-stat-bar"><span style={{ width: `${percentToday}%` }} /></div></div>
         </section>
 
+        {plan.insights && (
+          <section className="elp-intelligence" aria-label="Phân tích tiến độ học tập">
+            <article className="elp-card elp-insight-card">
+              <span className="elp-eyebrow">PHÂN TÍCH THEO KẾT QUẢ THẬT</span>
+              <h2>Tiến độ của bạn</h2>
+              <div className="elp-insight-metrics">
+                <div><strong>{plan.insights.streakDays}</strong><span>ngày học liên tiếp*</span></div>
+                <div><strong>{plan.insights.activeDaysLast7Days}/7</strong><span>ngày có đánh dấu hoàn thành</span></div>
+                <div><strong>{plan.insights.completedTasksLast7Days}</strong><span>nhiệm vụ đã đánh dấu / 7 ngày</span></div>
+                <div><strong>{plan.insights.readyDocuments}/{plan.insights.totalDocuments}</strong><span>tài liệu sẵn sàng</span></div>
+              </div>
+              <p className="elp-helper">*Chuỗi ngày tính theo ngày có ít nhất một nhiệm vụ bạn tự xác nhận; hôm nay chưa học vẫn giữ chuỗi nếu hôm qua có học.</p>
+            </article>
+            <article className="elp-card elp-insight-card">
+              <span className="elp-eyebrow">XU HƯỚNG LUYỆN THI</span>
+              <h2>{plan.insights.averageScoreLast3 === null ? "Chưa đủ kết quả luyện thi" : `${plan.insights.averageScoreLast3}% điểm trung bình gần đây`}</h2>
+              <p className="elp-trend-line">
+                {plan.insights.scoreTrendPoints === null
+                  ? "Cần ít nhất 4 bài đã nộp có điểm để so sánh xu hướng."
+                  : `So với nhóm bài trước: ${plan.insights.scoreTrendPoints > 0 ? "+" : ""}${plan.insights.scoreTrendPoints} điểm phần trăm`}
+              </p>
+              <div className="elp-insight-next">
+                <strong>Gợi ý bước tiếp theo</strong>
+                <span>{plan.insights.nextStep}</span>
+                <a href="#elp-week">Xem nhiệm vụ hôm nay ↗</a>
+              </div>
+            </article>
+          </section>
+        )}
+
+        {plan.history && plan.history.length > 0 && (
+          <section className="elp-card elp-history" aria-label="Nhật ký hoàn thành 7 ngày">
+            <div className="elp-section-head">
+              <div><span className="elp-eyebrow">NHẬT KÝ HỌC TẬP</span><h2>7 ngày gần nhất</h2>
+                <p>Số nhiệm vụ tự đánh dấu hoàn thành mỗi ngày (không phải số giờ học thực tế).</p>
+              </div>
+            </div>
+            <div className="elp-history-bars">
+              {plan.history.map((item) => (
+                <div className="elp-history-day" key={item.date} title={`${formatFullDate(item.date)}: ${item.completedTasks} nhiệm vụ`}>
+                  <strong>{item.completedTasks}</strong>
+                  <div className="elp-history-track"><span style={{height: `${Math.max(4, Math.min(100, (item.completedTasks / 3) * 100))}%`}} /></div>
+                  <small>{formatShortDate(item.date)}</small>
+                </div>
+              ))}
+            </div>
+            <p className="elp-helper">Lịch sử được đọc từ MySQL. Kế hoạch 7 ngày phía dưới được tính lại khi kết quả luyện thi thay đổi, không phải lịch sử đã khóa cố định.</p>
+          </section>
+        )}
+
         <div className="elp-content-grid">
           <section className="elp-card elp-priorities" aria-labelledby="elp-priorities-title">
             <div className="elp-section-head">
@@ -445,7 +529,8 @@ export default function StudyPlanPage() {
                   <div className="elp-priority-body">
                     <div className="elp-priority-title"><h3 title={item.documentName}>{item.documentName}</h3><span className="elp-priority-badge">Ưu tiên {item.priorityScore}</span></div>
                     <p>{item.reason}</p>
-                    <div className="elp-chips"><span>{item.submittedQuizzes} bài đã nộp</span><span>{item.latestScorePercent === null ? "Chưa có điểm" : `Điểm gần nhất ${item.latestScorePercent}%`}</span><span>{item.wrongAnswersLast30Days} câu sai/30 ngày</span><span className={item.indexed ? "elp-chip-ready" : "elp-chip-warn"}>{item.indexed ? "✓ Đã xử lý" : "! Cần lập chỉ mục"}</span></div>
+                    {item.recommendedAction && <p className="elp-next-action">→ {item.recommendedAction}</p>}
+                    <div className="elp-chips"><span>{item.submittedQuizzes} bài đã nộp</span><span>{item.latestScorePercent === null ? "Chưa có điểm" : `Điểm gần nhất ${item.latestScorePercent}%`}</span><span>{item.wrongAnswersLast30Days} câu sai/30 ngày</span>{item.trendDeltaPoints !== null && item.trendDeltaPoints !== undefined && <span>Xu hướng {item.trendDeltaPoints > 0 ? "+" : ""}{item.trendDeltaPoints} điểm</span>}<span className={item.indexed ? "elp-chip-ready" : "elp-chip-warn"}>{item.indexed ? "✓ Đã xử lý" : "! Cần lập chỉ mục"}</span></div>
                   </div>
                 </article>
               ))}
@@ -463,7 +548,7 @@ export default function StudyPlanPage() {
         </div>
 
         <section id="elp-week" className="elp-card elp-week" aria-labelledby="elp-week-title">
-          <div className="elp-section-head"><div><span className="elp-eyebrow">LỊCH HỌC CÁ NHÂN HÓA</span><h2 id="elp-week-title">Lộ trình {plan.days} ngày của bạn</h2><p>Chọn một ngày để xem tài liệu và nhiệm vụ tương ứng.</p></div><span className="elp-small-tag">{plan.dailyMinutes} phút/ngày</span></div>
+          <div className="elp-section-head"><div><span className="elp-eyebrow">LỊCH HỌC CÁ NHÂN HÓA</span><h2 id="elp-week-title">Lộ trình {plan.days} ngày của bạn</h2><p>Kế hoạch được cân bằng giữa môn ưu tiên cao và ôn lặp lại cách quãng; mỗi ngày gồm ba hoạt động.</p></div><span className="elp-small-tag">{plan.dailyMinutes} phút/ngày</span></div>
           <div className="elp-day-tabs" role="group" aria-label="Chọn ngày trong lộ trình">
             {plan.schedule.map((day, index) => {
               const dayProgress = getDayProgress(day);
@@ -474,7 +559,17 @@ export default function StudyPlanPage() {
             })}
           </div>
           {selectedDay && <div className="elp-day-detail">
-            <div className="elp-day-heading"><div><span className="elp-eyebrow">{canCompleteSelected ? "ƯU TIÊN HÔM NAY" : "KẾ HOẠCH THAM KHẢO"}</span><h3>{formatFullDate(selectedDay.date)}</h3><p>▤ {selectedDay.documentName}</p></div><span className="elp-day-count">{getDayProgress(selectedDay).completed}/{selectedDay.tasks.length} hoàn thành</span></div>
+            <div className="elp-day-heading"><div><span className="elp-eyebrow">{canCompleteSelected ? "ƯU TIÊN HÔM NAY" : "KẾ HOẠCH THAM KHẢO"}</span><h3>{formatFullDate(selectedDay.date)}</h3><p>▤ {selectedDay.documentName}</p>
+              {selectedDay.focusReason && <p className="elp-focus-reason">Lý do xếp lịch: {selectedDay.focusReason}</p>}
+              </div><span className="elp-day-count">{getDayProgress(selectedDay).completed}/{selectedDay.tasks.length} hoàn thành</span></div>
+            <div className="elp-time-allocation" aria-label="Phân bổ thời gian trong ngày">
+              <strong>{selectedDay.tasks.reduce((sum, task) => sum + task.estimatedMinutes, 0)} phút</strong>
+              <div className="elp-time-segments">
+                {selectedDay.tasks.map((task) => <span key={task.kind} title={`${task.title}: ${task.estimatedMinutes} phút`}
+                  style={{ flexGrow: task.estimatedMinutes }} />)}
+              </div>
+              <small>{selectedDay.tasks.map((task) => `${task.title}: ${task.estimatedMinutes}′`).join(" · ")}</small>
+            </div>
             {!canCompleteSelected && <div className="elp-info">Bạn có thể xem trước nhiệm vụ và mở khu vực học tập. Hệ thống chỉ hỗ trợ đánh dấu hoàn thành cho ngày hôm nay.</div>}
             {taskError && <p className="elp-task-error" role="alert">{taskError}</p>}
             <div className="elp-filter-row" role="group" aria-label="Lọc nhiệm vụ">
@@ -506,7 +601,7 @@ export default function StudyPlanPage() {
           {adviceError && <p className="elp-task-error" role="alert">{adviceError}</p>}
           {advice && <div className="elp-advice-result" aria-live="polite">{advice}</div>}
         </section>
-        <p className="elp-footnote">{plan.note} Khi nộp bài luyện thi mới, chọn “Làm mới” để cập nhật lộ trình. Thời gian tập trung và ghi chú cá nhân không được tính vào thống kê trên server.</p>
+        <p className="elp-footnote">{plan.note} Khi nộp bài luyện thi mới, chọn “Làm mới” để cập nhật lộ trình. Lịch học là đề xuất cuốn chiếu, không lưu lại kế hoạch từng ngày làm bản chụp cố định. Thời gian tập trung và ghi chú cá nhân không được tính vào thống kê trên server.</p>
       </>}
     </div>
   );

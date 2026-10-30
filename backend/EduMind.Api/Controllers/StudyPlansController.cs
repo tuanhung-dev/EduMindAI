@@ -20,13 +20,30 @@ public sealed record StudyTaskDto(string Kind, string Title, string Detail,
 }
 
 public sealed record StudyDayDto(string Date, int DocumentId, string DocumentName,
-    List<StudyTaskDto> Tasks);
+    List<StudyTaskDto> Tasks)
+{
+    public string FocusReason { get; init; } = "";
+}
 public sealed record StudyPriorityDto(int DocumentId, string DocumentName,
     int PriorityScore, string Reason, bool Indexed, int SubmittedQuizzes,
-    decimal? LatestScorePercent, int WrongAnswersLast30Days);
+    decimal? LatestScorePercent, int WrongAnswersLast30Days)
+{
+    public decimal? TrendDeltaPoints { get; init; }
+    public string RiskLevel { get; init; } = "medium";
+    public string RecommendedAction { get; init; } = "";
+}
+public sealed record StudyHistoryDayDto(string Date, int CompletedTasks);
+public sealed record StudyPlanInsightsDto(int TotalDocuments, int ReadyDocuments,
+    int WeakDocuments, int CompletedTasksLast7Days, int ActiveDaysLast7Days,
+    int StreakDays, decimal? AverageScoreLast3, decimal? PreviousAverageScore3,
+    decimal? ScoreTrendPoints, string NextStep);
 public sealed record StudyPlanDto(DateTime GeneratedAtUtc, string StartDate,
     int DailyMinutes, int Days, string Method, string PlanType,
-    List<StudyPriorityDto> Priorities, List<StudyDayDto> Schedule, string Note);
+    List<StudyPriorityDto> Priorities, List<StudyDayDto> Schedule, string Note)
+{
+    public StudyPlanInsightsDto? Insights { get; init; }
+    public List<StudyHistoryDayDto> History { get; init; } = [];
+}
 
 public sealed class UpdateStudyTaskRequest
 {
@@ -162,6 +179,8 @@ public sealed class StudyPlansController : ControllerBase
         (minutes is 30 or 45 or 60 or 90) && (offset is >= -840 and <= 720) &&
         (planType is "balanced" or "understanding" or "exam");
 
+    // The schedule is a rolling recommendation, not a historical snapshot.
+    // Completion rows are persisted and shown separately as history, even if priorities change.
     private async Task<StudyPlanDto> BuildPlanAsync(string ownerId, int dailyMinutes,
         int timezoneOffsetMinutes, string planType, CancellationToken ct)
     {
@@ -172,8 +191,8 @@ public sealed class StudyPlansController : ControllerBase
             .OrderByDescending(d => d.CreatedAtUtc).ThenByDescending(d => d.Id)
             .Select(d => new
             {
-                d.Id, d.OriginalFileName,
-                Indexed = _db.DocumentChunks.Any(c => c.DocumentId == d.Id)
+                d.Id, d.OriginalFileName, d.Status,
+                Indexed = d.Status == "Ready" && _db.DocumentChunks.Any(c => c.DocumentId == d.Id)
             }).ToListAsync(ct);
         var documentIds = documents.Select(d => d.Id).ToArray();
 
@@ -197,92 +216,197 @@ public sealed class StudyPlansController : ControllerBase
         var wrongByDocument = wrongAnswers.GroupBy(x => x.DocumentId)
             .ToDictionary(g => g.Key, g => g.Count());
 
+        // Fetch history independently of the rolling schedule. Otherwise previously
+        // completed tasks could 'disappear' when a new quiz changes document ranking.
+        var doneRows = await _db.StudyTaskCompletions.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.StudyDate >= start.AddDays(-6) &&
+                x.StudyDate <= start.AddDays(6))
+            .Select(x => new { x.StudyDate, x.DocumentId, x.Kind, x.CompletedAtUtc })
+            .ToListAsync(ct);
+        var completionMap = doneRows.ToDictionary(x =>
+            (x.StudyDate.Date, x.DocumentId, x.Kind), x => x.CompletedAtUtc);
+
         var priorities = new List<StudyPriorityDto>();
         foreach (var doc in documents)
         {
             var submitted = attempts.Where(x => x.DocumentId == doc.Id)
                 .OrderByDescending(x => x.SubmittedAtUtc).ToList();
-            decimal? latest = submitted.Count == 0 ? null : submitted[0].ScorePercent;
+            var scored = submitted.Where(x => x.ScorePercent.HasValue).ToList();
+            decimal? latest = scored.Count == 0 ? null : scored[0].ScorePercent;
+            decimal? trend = scored.Count >= 4
+                ? Math.Round(scored.Take(3).Average(x => x.ScorePercent!.Value) -
+                    scored.Skip(3).Take(3).Average(x => x.ScorePercent!.Value), 1)
+                : null;
             var wrong = wrongByDocument.GetValueOrDefault(doc.Id);
-            var points = (!latest.HasValue ? 40 : latest < 50 ? 60 : latest < 70 ? 45 :
-                latest < 85 ? 25 : 12) + Math.Min(30, wrong * 4) + (!doc.Indexed ? 15 : 0);
-            var reasons = new List<string>();
-            if (!doc.Indexed) reasons.Add("tài liệu chưa được lập chỉ mục");
-            if (!latest.HasValue) reasons.Add("chưa có bài luyện thi đã nộp");
-            else reasons.Add($"điểm lần gần nhất {latest.Value:0.#}%");
-            if (wrong > 0) reasons.Add($"{wrong} câu sai trong 30 ngày");
-            priorities.Add(new StudyPriorityDto(doc.Id, doc.OriginalFileName,
-                points, string.Join("; ", reasons), doc.Indexed, submitted.Count, latest, wrong));
-        }
-        priorities = priorities.OrderByDescending(x => x.PriorityScore)
-            .ThenBy(x => x.DocumentId).Take(6).ToList();
+            var daysSinceAttempt = submitted.Count == 0 ? 0 :
+                Math.Max(0, (int)(now - submitted[0].SubmittedAtUtc!.Value).TotalDays);
 
+            // Scores are a prioritization heuristic, not a predicted test result.
+            var score = (!latest.HasValue ? 42 : latest < 50 ? 65 : latest < 70 ? 48 :
+                latest < 85 ? 29 : 14) + Math.Min(36, wrong * 4) +
+                (!doc.Indexed ? 16 : 0) + (daysSinceAttempt >= 14 ? 12 :
+                daysSinceAttempt >= 7 ? 7 : 0) +
+                (trend.HasValue && trend.Value <= -8 ? 10 : 0);
+            score = Math.Min(130, score);
+            var reasons = new List<string>();
+            if (!doc.Indexed) reasons.Add("chưa sẵn sàng cho AI/Quiz");
+            if (!latest.HasValue) reasons.Add("chưa có bài luyện thi được chấm");
+            else reasons.Add($"điểm gần nhất {latest.Value:0.#}%");
+            if (wrong > 0) reasons.Add($"{wrong} câu sai trong 30 ngày");
+            if (trend.HasValue && trend.Value <= -8) reasons.Add("xu hướng điểm đang giảm");
+
+            var risk = !doc.Indexed ? "prepare" :
+                !latest.HasValue || latest.Value < 60 || wrong >= 5 ? "high" :
+                latest.Value < 80 || wrong > 0 ? "medium" : "low";
+            var action = !doc.Indexed ? "Chuẩn bị và lập chỉ mục tài liệu" :
+                !latest.HasValue ? "Làm bài đánh giá đầu vào" :
+                latest.Value < 70 || wrong > 0 ? "Ôn các câu sai và luyện lại" :
+                "Luyện vận dụng và củng cố";
+            priorities.Add(new StudyPriorityDto(doc.Id, doc.OriginalFileName,
+                score, string.Join("; ", reasons), doc.Indexed, submitted.Count, latest, wrong)
+            {
+                TrendDeltaPoints = trend, RiskLevel = risk, RecommendedAction = action
+            });
+        }
+        var weakDocumentCount = priorities.Count(x => x.RiskLevel is "high" or "medium");
+        // A completion today pins the selected document for the same learning mode.
+        // This avoids moving an in-progress session just because a new quiz is submitted.
+        var pinnedDocumentId = doneRows
+            .Where(x => x.StudyDate.Date == start &&
+                x.Kind.StartsWith(planType + "-", StringComparison.Ordinal))
+            .OrderBy(x => x.CompletedAtUtc).Select(x => x.DocumentId).FirstOrDefault();
+        var pinnedPriority = priorities.FirstOrDefault(x => x.DocumentId == pinnedDocumentId);
+        priorities = priorities.OrderByDescending(x => x.PriorityScore)
+            .ThenBy(x => x.DocumentId).Take(8).ToList();
+        // An in-progress document may have fallen below the top 8 after a quiz;
+        // retain it in the schedule rather than hiding today's saved completion.
+        if (pinnedPriority is not null && priorities.Count > 0 &&
+            !priorities.Any(x => x.DocumentId == pinnedDocumentId))
+            priorities[^1] = pinnedPriority;
+        var scheduledCount = new Dictionary<int, int>();
+        var lastScheduled = new Dictionary<int, int>();
         var days = new List<StudyDayDto>();
-        int[] rotation = [0, 1, 0, 2, 0, 1, 3];
         for (var i = 0; i < 7 && priorities.Count > 0; i++)
         {
-            var priority = priorities[rotation[i] % priorities.Count];
-            var tasks = new List<StudyTaskDto>();
-            StudyTaskDto Task(string type, string title, string detail, int minutes, string path) =>
-                new($"{planType}-{type}", title, detail, minutes, path);
-            var firstMinutes = Math.Max(10, dailyMinutes / 3);
-            if (!priority.Indexed)
-            {
-                tasks.Add(Task("index", "Chuẩn bị tài liệu", "Lập chỉ mục Word/PDF để Gia sư AI và Luyện thi có thể sử dụng kiến thức.",
-                    firstMinutes, "/app/documents"));
-                tasks.Add(Task("read", "Đọc nội dung tài liệu", "Xác định mục tiêu, chương quan trọng và ba câu hỏi chưa hiểu.",
-                    dailyMinutes - firstMinutes, "/app/ai-tutor"));
-            }
-            else if (planType == "understanding")
-            {
-                tasks.Add(Task("read", "Đọc hiểu một chủ đề", "Chọn một phần tài liệu, ghi ý chính và xác định thuật ngữ chưa rõ.",
-                    firstMinutes, "/app/documents"));
-                tasks.Add(Task("tutor", "Thảo luận cùng Gia sư AI", "Yêu cầu giải thích bằng ví dụ, đối chiếu trang nguồn và tự diễn đạt lại.",
-                    dailyMinutes - firstMinutes, "/app/ai-tutor"));
-            }
-            else if (planType == "exam")
-            {
-                tasks.Add(Task("practice", "Luyện đề theo mức độ", "Làm một bài kiểm tra trong thời gian giới hạn và nộp bài.",
-                    dailyMinutes - firstMinutes, "/app/quizzes"));
-                tasks.Add(Task("review", "Phân tích câu sai", "Đối chiếu lời giải với tài liệu và hỏi Gia sư AI khi chưa hiểu.",
-                    firstMinutes, "/app/progress"));
-            }
-            else if (priority.SubmittedQuizzes == 0 || i % 3 == 0)
-            {
-                tasks.Add(Task("tutor", "Học lý thuyết cùng Gia sư AI", "Tóm tắt phần kiến thức chính và hỏi một câu vận dụng.",
-                    firstMinutes, "/app/ai-tutor"));
-                tasks.Add(Task("practice", "Luyện thi tự đánh giá", "Tạo đề ngắn từ tài liệu và xem giải thích khi hoàn thành.",
-                    dailyMinutes - firstMinutes, "/app/quizzes"));
-            }
+            StudyPriorityDto priority;
+            if (i == 0 && pinnedDocumentId > 0 &&
+                priorities.Any(p => p.DocumentId == pinnedDocumentId))
+                priority = priorities.First(p => p.DocumentId == pinnedDocumentId);
             else
             {
-                tasks.Add(Task("review", "Ôn câu đã làm sai", "Xem lại đề cũ, đọc nguồn trong tài liệu và ghi lý do chọn sai.",
-                    firstMinutes, "/app/progress"));
-                tasks.Add(Task("practice", "Luyện thi củng cố", "Làm một đề khác, theo dõi sự thay đổi điểm số thực tế.",
-                    dailyMinutes - firstMinutes, "/app/quizzes"));
+                // When multiple documents exist, never schedule the same one
+                // on consecutive days. The relative scores still decide the order.
+                var candidates = priorities.Count > 1 && days.Count > 0
+                    ? priorities.Where(p => p.DocumentId != days[^1].DocumentId)
+                    : priorities.AsEnumerable();
+                priority = candidates.OrderByDescending(p =>
+                {
+                    var uses = scheduledCount.GetValueOrDefault(p.DocumentId);
+                    var last = lastScheduled.GetValueOrDefault(p.DocumentId, -100);
+                    var gap = i - last;
+                    return p.PriorityScore - uses * 23 +
+                        (gap == 2 ? 12 : gap == 3 ? 18 : 0);
+                }).ThenByDescending(p => p.PriorityScore)
+                  .ThenBy(p => p.DocumentId).First();
             }
-            days.Add(new StudyDayDto(start.AddDays(i).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                priority.DocumentId, priority.DocumentName, tasks));
-        }
-        var doneRows = await _db.StudyTaskCompletions.AsNoTracking()
-            .Where(x => x.OwnerUserId == ownerId && x.StudyDate >= start &&
-                x.StudyDate < start.AddDays(7))
-            .Select(x => new { x.StudyDate, x.DocumentId, x.Kind, x.CompletedAtUtc })
-            .ToListAsync(ct);
-        var completionMap = doneRows.ToDictionary(x =>
-            (x.StudyDate.Date, x.DocumentId, x.Kind), x => x.CompletedAtUtc);
-        days = days.Select(day =>
-        {
-            var date = DateTime.ParseExact(day.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-            return day with { Tasks = day.Tasks.Select(task =>
+
+            scheduledCount[priority.DocumentId] =
+                scheduledCount.GetValueOrDefault(priority.DocumentId) + 1;
+            lastScheduled[priority.DocumentId] = i;
+            var taskList = CreateTasks(priority, dailyMinutes, planType, i);
+            var date = start.AddDays(i);
+            taskList = taskList.Select(t =>
             {
-                var found = completionMap.TryGetValue((date, day.DocumentId, task.Kind), out var done);
-                return task with { Completed = found, CompletedAtUtc = found ? done : null };
-            }).ToList() };
-        }).ToList();
+                var found = completionMap.TryGetValue((date, priority.DocumentId, t.Kind), out var completedAt);
+                return t with { Completed = found, CompletedAtUtc = found ? completedAt : null };
+            }).ToList();
+            days.Add(new StudyDayDto(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                priority.DocumentId, priority.DocumentName, taskList)
+            {
+                FocusReason = $"{priority.RecommendedAction}. {priority.Reason}"
+            });
+        }
+
+        var history = Enumerable.Range(0, 7).Select(i => start.AddDays(i - 6))
+            .Select(date => new StudyHistoryDayDto(
+                date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                doneRows.Count(x => x.StudyDate.Date == date)))
+            .ToList();
+        // Read distinct historical dates, not every old row, for an accurate streak.
+        var activeDates = (await _db.StudyTaskCompletions.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.StudyDate <= start)
+            .Select(x => x.StudyDate).Distinct().ToListAsync(ct))
+            .Select(x => x.Date).ToHashSet();
+        var cursor = activeDates.Contains(start) ? start : start.AddDays(-1);
+        var streak = 0;
+        while (activeDates.Contains(cursor))
+        {
+            streak++;
+            cursor = cursor.AddDays(-1);
+        }
+        var scoredRecent = attempts.Where(x => x.ScorePercent.HasValue)
+            .OrderByDescending(x => x.SubmittedAtUtc).ToList();
+        decimal? averageLatest = scoredRecent.Count > 0
+            ? Math.Round(scoredRecent.Take(3).Average(x => x.ScorePercent!.Value), 1) : null;
+        decimal? averagePrevious = scoredRecent.Count >= 4
+            ? Math.Round(scoredRecent.Skip(3).Take(3).Average(x => x.ScorePercent!.Value), 1) : null;
+        var insight = new StudyPlanInsightsDto(
+            documents.Count, documents.Count(x => x.Indexed),
+            weakDocumentCount,
+            history.Sum(x => x.CompletedTasks), history.Count(x => x.CompletedTasks > 0),
+            streak, averageLatest, averagePrevious,
+            averageLatest.HasValue && averagePrevious.HasValue
+                ? Math.Round(averageLatest.Value - averagePrevious.Value, 1) : null,
+            priorities.Count == 0 ? "Tải tài liệu lên để bắt đầu lập kế hoạch." :
+                priorities[0].RecommendedAction + " — " + priorities[0].DocumentName);
+
         return new StudyPlanDto(now, start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            dailyMinutes, 7, "documents-quiz-results-and-wrong-answers", planType,
-            priorities, days, "Kế hoạch dựa trên tài liệu của bạn, điểm luyện thi và câu sai thực tế. " +
-            "Đánh dấu hoàn thành là tự báo cáo, không phải minh chứng đã nắm vững kiến thức.");
+            dailyMinutes, 7, "adaptive-score-wrong-answers-recency-spaced-practice-v2",
+            planType, priorities, days,
+            "Đề xuất dựa trên tài liệu, kết quả thi, câu sai và lịch sử hoàn thành. " +
+            "Hoàn thành là do học viên tự đánh dấu, không chứng minh đã nắm vững kiến thức.")
+        {
+            Insights = insight,
+            History = history
+        };
+    }
+
+    // Three stable task keys per method keep completion records meaningful as
+    // scores, document indexing or the available time change over the day.
+    private static List<StudyTaskDto> CreateTasks(StudyPriorityDto doc,
+        int dailyMinutes, string planType, int dayIndex)
+    {
+        var prepareMinutes = Math.Max(5, (int)Math.Round(dailyMinutes * 0.20));
+        var learnShare = planType == "understanding" ? 0.55 :
+            planType == "exam" ? 0.30 : 0.45;
+        var learnMinutes = Math.Max(10, (int)Math.Round(dailyMinutes * learnShare));
+        var checkMinutes = dailyMinutes - prepareMinutes - learnMinutes;
+        // All allowed 30/45/60/90 minute options leave at least 8 minutes for check.
+        var docs = $"/app/documents/{doc.DocumentId}";
+        var tutor = $"/app/ai-tutor?documentId={doc.DocumentId}";
+        var quizzes = $"/app/quizzes?documentId={doc.DocumentId}";
+        var testMode = planType == "exam" || (planType == "balanced" && dayIndex % 2 == 0);
+        return
+        [
+            new StudyTaskDto($"{planType}-prepare",
+                doc.Indexed ? "Khởi động và nhớ lại kiến thức" : "Kiểm tra và chuẩn bị học liệu",
+                doc.Indexed ? "Xem lại nội dung chính, tự nhớ 3 ý trước khi đọc đáp án." :
+                    "Xem trạng thái, lập chỉ mục nếu cần; xác định phần nội dung muốn học.",
+                prepareMinutes, docs),
+            new StudyTaskDto($"{planType}-learn",
+                !doc.Indexed ? "Đọc tài liệu và ghi chú" :
+                    planType == "exam" ? "Chữa các nội dung còn yếu" : "Học có chủ đích",
+                !doc.Indexed ? "Đọc tài liệu gốc, ghi 3 điểm quan trọng; AI chưa sẵn sàng." :
+                    planType == "exam" ? "Ôn trang chứa kiến thức còn yếu và giải thích vì sao từng đáp án sai." :
+                    "Đọc theo câu hỏi, tự giải thích lại và kiểm tra nguồn tài liệu.",
+                learnMinutes, !doc.Indexed ? docs : planType == "exam" ? "/app/progress" : tutor),
+            new StudyTaskDto($"{planType}-check",
+                !doc.Indexed ? "Tự kiểm tra không dùng AI" :
+                    testMode ? "Làm bài đánh giá ngắn" : "Vận dụng với Gia sư AI",
+                !doc.Indexed ? "Tự viết 3 câu hỏi và trả lời từ tài liệu đang có." :
+                    testMode ? "Làm đề rồi đối chiếu điểm và câu sai để cập nhật lộ trình." :
+                    "Yêu cầu ví dụ ứng dụng, tự trả lời và so lại với nguồn.",
+                checkMinutes, !doc.Indexed ? docs : testMode ? quizzes : tutor)
+        ];
     }
 }

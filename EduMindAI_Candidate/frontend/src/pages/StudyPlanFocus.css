@@ -1,0 +1,12 @@
+.study-focus .study-focus-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.study-focus .study-focus-option{background:#f9fbff;border:1px solid #dce5f6;text-align:left;border-radius:16px;padding:20px;color:#23314b;display:flex;flex-direction:column;gap:10px;cursor:pointer;min-width:0}
+.study-focus .study-focus-option:hover,.study-focus .study-focus-option:focus-visible{border-color:#4667cf;outline-offset:3px}
+.study-focus .study-focus-option.study-focus-active{background:#eef3ff;border:2px solid #3c56c5;padding:19px}
+.study-focus .study-focus-option-icon{font-size:1.7rem;color:#3e5ac7}
+.study-focus .study-focus-option small{line-height:1.6;color:#60718b}
+.study-focus .study-focus-tip{color:#576782;line-height:1.6}
+.study-focus .study-focus-task-mark{display:flex;align-items:flex-start;padding:5px}
+.study-focus .study-focus-task-mark input{width:18px;height:18px;accent-color:#4869d5}
+.study-focus .study-focus-complete{background:#f0f8f3}
+.study-focus .study-focus-complete .sp28-task-content strong{text-decoration:line-through;opacity:.7}
+@media(max-width:830px){.study-focus .study-focus-options{grid-template-columns:1fr}}

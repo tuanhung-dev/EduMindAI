@@ -116,7 +116,9 @@ export async function streamAskDocument(
   try {
     while (true) {
       const { value, done } = await reader.read();
-      buffer += decoder.decode(value, { stream: !done });
+      // Accept both LF and CRLF SSE framing (reverse proxies may normalize
+      // newlines). Keep boundary bytes in the buffer until a full frame exists.
+      buffer = (buffer + decoder.decode(value, { stream: !done })).replace(/\r\n/g, "\n");
       let separator = buffer.indexOf("\n\n");
       while (separator !== -1) {
         const frame = buffer.slice(0, separator).replace(/\r/g, "");
@@ -127,7 +129,11 @@ export async function streamAskDocument(
         if (data) {
           const payload = JSON.parse(data) as Record<string, unknown>;
           if (event === "delta" && typeof payload.text === "string") onDelta(payload.text);
-          if (event === "error") throw new Error(typeof payload.message === "string" ? payload.message : "AI gặp lỗi khi tạo câu trả lời.");
+          if (event === "error") {
+            const message = typeof payload.message === "string" ? payload.message : "AI gặp lỗi khi tạo câu trả lời.";
+            const trace = typeof payload.traceId === "string" ? ` (Mã: ${payload.traceId})` : "";
+            throw new Error(message + trace);
+          }
           if (event === "done") completed = payload as unknown as AiAnswer;
         }
         separator = buffer.indexOf("\n\n");
