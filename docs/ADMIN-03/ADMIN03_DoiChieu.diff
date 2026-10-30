@@ -1,0 +1,451 @@
+--- OLD/frontend/src/pages/AdminSubjectsPage.tsx
++++ NEW/frontend/src/pages/AdminSubjectsPage.tsx
+@@ -1,70 +1,390 @@
+-import { useEffect, useState, type FormEvent } from "react";
++import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
++import { Link } from "react-router-dom";
+ import { getSubjects, type Subject } from "../services/subjectService";
+-import { authenticatedFetch } from "../services/authService";
+-import WorkspaceHeader from "../components/WorkspaceHeader";
++import {
++  createAdminSubject, deleteAdminSubject, updateAdminSubject,
++  type SubjectPayload,
++} from "../services/adminSubjectsService";
++import "./AdminSubjectsPage.css";
++
++type StatusFilter = "all" | "active" | "inactive";
++type SortMode = "newest" | "name" | "code";
++type ViewMode = "table" | "grid";
++type Dialog =
++  | { kind: "create" }
++  | { kind: "edit"; subject: Subject }
++  | { kind: "details"; subject: Subject }
++  | { kind: "toggle"; subject: Subject }
++  | { kind: "delete"; subject: Subject };
++
++type FormValues = { code: string; name: string; description: string; isActive: boolean };
++const blankForm = (): FormValues => ({ code: "", name: "", description: "", isActive: true });
++const PAGE_SIZE = 10;
++const collator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" });
++const normalize = (value: string) => value.normalize("NFD")
++  .replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
++const dateLabel = (value: string) => {
++  const d = new Date(value);
++  return Number.isNaN(d.getTime()) ? "Chưa rõ" : d.toLocaleDateString("vi-VN");
++};
++const errorText = (reason: unknown, fallback: string) =>
++  reason instanceof Error && reason.message ? reason.message : fallback;
++
++function StatusBadge({ active }: { active: boolean }) {
++  return (
++    <span className={`ads3-state ${active ? "ads3-state--active" : "ads3-state--inactive"}`}>
++      <span aria-hidden="true" />{active ? "Đang hoạt động" : "Đang ẩn"}
++    </span>
++  );
++}
++
++function quoteCsv(value: unknown): string {
++  const raw = String(value ?? "");
++  // Chặn spreadsheet formula injection nếu tên hoặc mô tả bắt đầu bằng ký tự công thức.
++  const safe = /^[\s]*[=+@\-\t\r]/.test(raw) ? `'${raw}` : raw;
++  return `"${safe.replace(/"/g, '""')}"`;
++}
+ 
+ export default function AdminSubjectsPage() {
+   const [subjects, setSubjects] = useState<Subject[]>([]);
+-  const [code, setCode] = useState("");
+-  const [name, setName] = useState("");
+-  const [error, setError] = useState("");
+-  const [notice, setNotice] = useState("");
+-  const [busy, setBusy] = useState(false);
+   const [loading, setLoading] = useState(true);
+-  const [search, setSearch] = useState("");
+-  async function reload() { setSubjects(await getSubjects()); }
++  const [loadError, setLoadError] = useState("");
++  const [message, setMessage] = useState("");
++  const [actionError, setActionError] = useState("");
++  const [refreshKey, setRefreshKey] = useState(0);
++  const [query, setQuery] = useState("");
++  const [status, setStatus] = useState<StatusFilter>("all");
++  const [sortMode, setSortMode] = useState<SortMode>("newest");
++  const [view, setView] = useState<ViewMode>("table");
++  const [page, setPage] = useState(1);
++  const [dialog, setDialog] = useState<Dialog | null>(null);
++  const [form, setForm] = useState<FormValues>(blankForm);
++  const [confirmCode, setConfirmCode] = useState("");
++  const [saving, setSaving] = useState(false);
++  const modalRef = useRef<HTMLDivElement>(null);
++  const initialFocusRef = useRef<HTMLInputElement>(null);
++  const lastTriggerRef = useRef<HTMLElement | null>(null);
++  const busyRef = useRef(false);
++
+   useEffect(() => {
+-    let active = true;
+-    getSubjects().then(items => { if (active) setSubjects(items); })
+-      .catch(() => { if (active) setError("Không tải được môn học."); })
+-      .finally(() => { if (active) setLoading(false); });
+-    return () => { active = false; };
+-  }, []);
+-  async function create(e: FormEvent<HTMLFormElement>) {
+-    e.preventDefault(); setError(""); setNotice(""); setBusy(true);
++    let live = true;
++    getSubjects().then((items) => {
++      if (!live) return;
++      setSubjects(items);
++      setLoadError("");
++    }).catch((reason: unknown) => {
++      if (live) setLoadError(errorText(reason, "Không tải được danh sách môn học."));
++    }).finally(() => { if (live) setLoading(false); });
++    return () => { live = false; };
++  }, [refreshKey]);
++
++  const activeCount = subjects.filter((s) => s.isActive).length;
++  const inactiveCount = subjects.length - activeCount;
++
++  const filtered = useMemo(() => {
++    const term = normalize(query.trim());
++    const result = subjects.filter((subject) => {
++      const matchesStatus = status === "all" ||
++        (status === "active" ? subject.isActive : !subject.isActive);
++      const matchesQuery = !term || normalize(
++        `${subject.code} ${subject.name} ${subject.description ?? ""}`
++      ).includes(term);
++      return matchesStatus && matchesQuery;
++    });
++    return result.sort((a, b) => sortMode === "name" ? collator.compare(a.name, b.name)
++      : sortMode === "code" ? collator.compare(a.code, b.code)
++      : (Date.parse(b.createdAtUtc) || 0) - (Date.parse(a.createdAtUtc) || 0) || b.id - a.id);
++  }, [subjects, query, status, sortMode]);
++
++  const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
++  const currentPage = Math.min(page, maxPage);
++  const currentItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
++  const existingCode = subjects.some((s) => s.code.trim().toUpperCase() === form.code.trim().toUpperCase() &&
++    (dialog?.kind !== "edit" || s.id !== dialog.subject.id));
++  const formCode = form.code.trim().toUpperCase();
++  const formName = form.name.trim();
++  const description = form.description.trim();
++  const invalidCode = formCode.length < 2 || formCode.length > 20;
++  const invalidName = formName.length < 1 || formName.length > 150;
++  const invalidDescription = description.length > 500;
++  const canSave = !invalidCode && !invalidName && !invalidDescription && !existingCode && !saving;
++
++  function reload() {
++    setLoading(true);
++    setRefreshKey((value) => value + 1);
++  }
++
++  function openDialog(next: Dialog) {
++    if (busyRef.current) return;
++    lastTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
++    setActionError("");
++    setConfirmCode("");
++    setForm(next.kind === "edit" ? {
++      code: next.subject.code,
++      name: next.subject.name,
++      description: next.subject.description ?? "",
++      isActive: next.subject.isActive,
++    } : blankForm());
++    setDialog(next);
++  }
++
++  function closeDialog() {
++    if (busyRef.current) return;
++    setDialog(null);
++    setActionError("");
++  }
++
++  useEffect(() => {
++    if (!dialog) return;
++    const previousOverflow = document.body.style.overflow;
++    document.body.style.overflow = "hidden";
++    const frame = window.requestAnimationFrame(() => {
++      if (dialog.kind === "create" || dialog.kind === "edit" || dialog.kind === "delete") {
++        initialFocusRef.current?.focus();
++      } else modalRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus();
++    });
++    const onKeyDown = (event: globalThis.KeyboardEvent) => {
++      if (event.key === "Escape" && !busyRef.current) {
++        event.preventDefault(); closeDialog();
++      }
++      if (event.key !== "Tab" || !modalRef.current) return;
++      const elements = Array.from(modalRef.current.querySelectorAll<HTMLElement>(
++        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href]'
++      )).filter((node) => node.getClientRects().length > 0);
++      if (!elements.length) return;
++      if (event.shiftKey && document.activeElement === elements[0]) {
++        event.preventDefault(); elements[elements.length - 1].focus();
++      } else if (!event.shiftKey && document.activeElement === elements[elements.length - 1]) {
++        event.preventDefault(); elements[0].focus();
++      }
++    };
++    document.addEventListener("keydown", onKeyDown);
++    return () => {
++      window.cancelAnimationFrame(frame);
++      document.body.style.overflow = previousOverflow;
++      document.removeEventListener("keydown", onKeyDown);
++      lastTriggerRef.current?.focus();
++    };
++  }, [dialog]);
++
++  async function saveSubject(event: FormEvent<HTMLFormElement>) {
++    event.preventDefault();
++    if ((dialog?.kind !== "create" && dialog?.kind !== "edit") || !canSave || busyRef.current) return;
++    busyRef.current = true;
++    setSaving(true); setActionError(""); setMessage("");
++    const payload: SubjectPayload = { code: formCode, name: formName, description: description || null, isActive: form.isActive };
++    const current = dialog;
+     try {
+-      const response = await authenticatedFetch("/api/subjects", { method: "POST", headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ code: code.trim(), name: name.trim(), description: "", isActive: true }) });
+-      if (!response.ok) throw new Error(`Không thể tạo môn học (HTTP ${response.status}).`);
+-      setCode(""); setName(""); await reload(); setNotice("Đã tạo môn học mới.");
+-    } catch (err) { setError(err instanceof Error ? err.message : "Có lỗi khi tạo môn học."); }
+-    finally { setBusy(false); }
+-  }
+-  async function toggle(subject: Subject) {
+-    setError(""); setNotice(""); setBusy(true);
++      if (current.kind === "create") await createAdminSubject(payload);
++      else await updateAdminSubject(current.subject.id, payload);
++      setDialog(null);
++      setMessage(current.kind === "create" ? `Đã tạo môn ${payload.code}.` : `Đã cập nhật môn ${payload.code}.`);
++      reload();
++    } catch (reason) {
++      setActionError(errorText(reason, "Không lưu được thông tin môn học."));
++    } finally { busyRef.current = false; setSaving(false); }
++  }
++
++  async function confirmAction() {
++    if (!dialog || busyRef.current || (dialog.kind !== "toggle" && dialog.kind !== "delete")) return;
++    if (dialog.kind === "delete" && confirmCode.trim().toUpperCase() !== dialog.subject.code.trim().toUpperCase()) return;
++    const current = dialog;
++    busyRef.current = true; setSaving(true); setActionError(""); setMessage("");
+     try {
+-      const response = await authenticatedFetch(`/api/subjects/${subject.id}`, { method: "PUT", headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ code: subject.code, name: subject.name, description: subject.description, isActive: !subject.isActive }) });
+-      if (!response.ok) throw new Error(`Không cập nhật được (HTTP ${response.status}).`);
+-      await reload(); setNotice(`Đã ${subject.isActive ? "ẩn" : "hiện"} môn học ${subject.code}.`);
+-    } catch (err) { setError(err instanceof Error ? err.message : "Không cập nhật được."); }
+-    finally { setBusy(false); }
+-  }
+-  const filtered = subjects.filter(s => `${s.name} ${s.code}`.toLocaleLowerCase("vi-VN").includes(search.trim().toLocaleLowerCase("vi-VN")));
+-  return <section className="emw-admin-subjects">
+-    <WorkspaceHeader eyebrow="QUẢN TRỊ HỆ THỐNG" title="Quản trị môn học" icon="▧"
+-      description="Tạo môn học và điều chỉnh trạng thái hiển thị. Chỉ tài khoản Admin được thực hiện thay đổi." />
+-    {error && <p role="alert" className="emw-alert emw-alert-error">{error}</p>}
+-    {notice && <p role="status" className="emw-alert emw-alert-success">{notice}</p>}
+-    <div className="emw-admin-subjects-grid">
+-      <section className="emw-panel emw-admin-subjects-create">
+-        <span className="emw-eyebrow">THÊM MÔN HỌC</span><h2>Tạo môn học mới</h2>
+-        <p>Môn mới sẽ hiển thị cho học viên khi được kích hoạt.</p>
+-        <form onSubmit={create}>
+-          <label htmlFor="emw-subject-code">Mã môn học</label>
+-          <input id="emw-subject-code" placeholder="Ví dụ: AI101" required minLength={2} maxLength={20} value={code} onChange={e => setCode(e.target.value)} />
+-          <label htmlFor="emw-subject-name">Tên môn học</label>
+-          <input id="emw-subject-name" placeholder="Nhập tên môn học" required maxLength={150} value={name} onChange={e => setName(e.target.value)} />
+-          <button className="emw-button emw-button-primary" type="submit" disabled={busy}>{busy ? "Đang xử lý…" : "＋ Thêm môn học"}</button>
+-        </form>
++      if (current.kind === "toggle") {
++        await updateAdminSubject(current.subject.id, {
++          code: current.subject.code, name: current.subject.name,
++          description: current.subject.description,
++          isActive: !current.subject.isActive,
++        });
++        setMessage(`Đã ${current.subject.isActive ? "ẩn" : "hiện"} môn ${current.subject.code}.`);
++      } else {
++        await deleteAdminSubject(current.subject.id);
++        setMessage(`Đã xóa môn ${current.subject.code}.`);
++      }
++      setDialog(null);
++      reload();
++    } catch (reason) {
++      setActionError(errorText(reason, "Không hoàn tất được thao tác."));
++    } finally { busyRef.current = false; setSaving(false); }
++  }
++
++  function exportCsv() {
++    if (!filtered.length) return;
++    const rows: unknown[][] = [["ID", "Mã môn", "Tên môn", "Mô tả", "Trạng thái", "Ngày tạo"],
++      ...filtered.map((s) => [s.id, s.code, s.name, s.description ?? "", s.isActive ? "Hoạt động" : "Đã ẩn", dateLabel(s.createdAtUtc)])];
++    const csv = "\uFEFF" + rows.map((row) => row.map(quoteCsv).join(",")).join("\r\n");
++    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
++    const anchor = document.createElement("a");
++    anchor.href = url; anchor.download = "EduMindAI_Admin_DanhSachMonHoc.csv";
++    document.body.appendChild(anchor); anchor.click(); anchor.remove();
++    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
++  }
++
++  function renderActions(subject: Subject) {
++    return <div className="ads3-actions">
++      <button type="button" disabled={saving} onClick={() => openDialog({ kind: "details", subject })}>Chi tiết</button>
++      <button type="button" disabled={saving} onClick={() => openDialog({ kind: "edit", subject })}>Sửa</button>
++      <button type="button" disabled={saving} onClick={() => openDialog({ kind: "toggle", subject })}>
++        {subject.isActive ? "Ẩn môn" : "Hiện môn"}
++      </button>
++      <button type="button" className="ads3-action-danger" disabled={saving} onClick={() => openDialog({ kind: "delete", subject })}>Xóa</button>
++    </div>;
++  }
++
++  return (
++    <div className="ads3-page">
++      <header className="ads3-hero">
++        <div>
++          <span className="ads3-kicker">EDUMIND AI · TRUNG TÂM QUẢN TRỊ</span>
++          <h1>Quản lý môn học</h1>
++          <p>Tạo và cập nhật danh mục học tập, kiểm soát trạng thái hiển thị cho học viên trong cùng một nơi.</p>
++          <div className="ads3-hero-tags"><span>✓ Dữ liệu từ API</span><span>✓ Kiểm tra trùng mã</span><span>✓ Xác nhận trước khi thay đổi</span></div>
++        </div>
++        <div className="ads3-hero-buttons">
++          <button type="button" className="ads3-btn ads3-btn-light" onClick={() => openDialog({ kind: "create" })}>＋ Thêm môn học</button>
++          <Link to="/app/admin" className="ads3-btn ads3-btn-outline">← Dashboard Admin</Link>
++        </div>
++      </header>
++
++      <section className="ads3-stats" aria-label="Tổng quan môn học">
++        {[{ label: "Tổng môn học", value: subjects.length, icon: "▧" },
++          { label: "Đang hoạt động", value: activeCount, icon: "✓" },
++          { label: "Đang ẩn", value: inactiveCount, icon: "◷" },
++          { label: "Kết quả bộ lọc", value: filtered.length, icon: "⌕" }].map((card) => (
++          <div className="ads3-stat" key={card.label}>
++            <span className="ads3-stat-icon" aria-hidden="true">{card.icon}</span>
++            <span>{card.label}</span>
++            <strong>{loading || (loadError && !subjects.length) ? "—" : card.value}</strong>
++          </div>
++        ))}
+       </section>
+-      <section className="emw-panel emw-admin-subjects-list">
+-        <div className="emw-section-title"><div><span className="emw-eyebrow">DANH SÁCH</span><h2>Tất cả môn học</h2></div><span className="emw-result-count">{subjects.length} môn</span></div>
+-        <label htmlFor="emw-admin-subject-search" className="emw-search-field"><span aria-hidden="true">⌕</span><input type="search" id="emw-admin-subject-search" placeholder="Tìm tên hoặc mã môn..." value={search} onChange={e => setSearch(e.target.value)} /></label>
+-        {loading ? <p role="status" className="emw-state">Đang tải môn học…</p> : filtered.length ? <div className="emw-admin-subject-rows">
+-          {filtered.map(s => <div key={s.id} className="emw-admin-subject-row"><div><span className="emw-eyebrow">{s.code}</span><strong>{s.name}</strong><small>{s.isActive ? "Đang hoạt động" : "Đã ẩn"}</small></div><button type="button" className="emw-button emw-button-outline" disabled={busy} onClick={() => void toggle(s)}>{s.isActive ? "Ẩn môn" : "Hiện môn"}</button></div>)}
+-        </div> : <div className="emw-state">Không có môn học phù hợp.</div>}
++
++      <section className="ads3-panel" aria-labelledby="ads3-list-title">
++        <div className="ads3-panel-top">
++          <div><span className="ads3-eyebrow">DANH MỤC ĐANG QUẢN LÝ</span><h2 id="ads3-list-title">Danh sách môn học</h2>
++            <p>Tra cứu, chỉnh sửa, ẩn/hiện hoặc quản lý chi tiết từng môn học.</p></div>
++          <div className="ads3-panel-buttons">
++            <button type="button" className="ads3-btn ads3-btn-neutral" onClick={reload} disabled={loading || saving}>↻ Làm mới</button>
++            <button type="button" className="ads3-btn ads3-btn-neutral" disabled={!filtered.length || loading} onClick={exportCsv}>↓ Xuất CSV</button>
++          </div>
++        </div>
++
++        {message && <div className="ads3-notice ads3-notice-success" role="status"><span>{message}</span><button type="button" onClick={() => setMessage("")} aria-label="Đóng thông báo">×</button></div>}
++        {loadError && <div className="ads3-notice ads3-notice-error" role="alert"><span>{loadError}</span><button type="button" onClick={reload}>Thử lại</button></div>}
++
++        <div className="ads3-toolbar">
++          <label className="ads3-search"><span className="ads3-label">Tìm kiếm môn học</span>
++            <span className="ads3-input-wrap"><span aria-hidden="true">⌕</span>
++              <input type="search" value={query} placeholder="Tên, mã hoặc nội dung mô tả..." onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
++              {query && <button type="button" aria-label="Xóa tìm kiếm" onClick={() => { setQuery(""); setPage(1); }}>×</button>}
++            </span>
++          </label>
++          <label className="ads3-select"><span className="ads3-label">Trạng thái</span><select value={status} onChange={(event) => { setStatus(event.target.value as StatusFilter); setPage(1); }}>
++            <option value="all">Tất cả trạng thái</option><option value="active">Đang hoạt động</option><option value="inactive">Đang ẩn</option>
++          </select></label>
++          <label className="ads3-select"><span className="ads3-label">Sắp xếp</span><select value={sortMode} onChange={(event) => { setSortMode(event.target.value as SortMode); setPage(1); }}>
++            <option value="newest">Mới thêm gần đây</option><option value="name">Tên môn A–Z</option><option value="code">Mã môn A–Z</option>
++          </select></label>
++          <div className="ads3-view-control" role="group" aria-label="Kiểu hiển thị">
++            <button type="button" className={view === "table" ? "is-active" : ""} aria-pressed={view === "table"} onClick={() => setView("table")}>☷ <span>Bảng</span></button>
++            <button type="button" className={view === "grid" ? "is-active" : ""} aria-pressed={view === "grid"} onClick={() => setView("grid")}>▦ <span>Thẻ</span></button>
++          </div>
++        </div>
++
++        {loading && !subjects.length ? <div className="ads3-feedback" role="status"><span className="ads3-spinner" aria-hidden="true" /><strong>Đang tải danh mục môn học...</strong></div>
++          : !loadError && !subjects.length ? <div className="ads3-feedback"><span>▧</span><strong>Chưa có môn học</strong><p>Tạo môn học đầu tiên để bắt đầu xây dựng danh mục.</p><button className="ads3-btn ads3-btn-primary" onClick={() => openDialog({ kind: "create" })}>＋ Tạo môn học</button></div>
++            : !filtered.length ? <div className="ads3-feedback"><span>⌕</span><strong>Không tìm thấy kết quả phù hợp</strong><p>Thử thay đổi từ khóa hoặc trạng thái.</p><button type="button" className="ads3-btn ads3-btn-neutral" onClick={() => { setQuery(""); setStatus("all"); setPage(1); }}>Xóa bộ lọc</button></div>
++              : <>
++                <div className="ads3-result-line"><span>Hiển thị <strong>{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)}</strong> / {filtered.length} môn phù hợp</span>
++                  <span>{loading ? "Đang cập nhật dữ liệu..." : "Danh sách toàn hệ thống"}</span></div>
++                {view === "table" ? <div className="ads3-table-scroll"><table className="ads3-table">
++                  <thead><tr><th>Mã môn</th><th>Tên và mô tả</th><th>Ngày tạo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
++                  <tbody>{currentItems.map((subject) => <tr key={subject.id}>
++                    <td><span className="ads3-code">{subject.code}</span><small>#{subject.id}</small></td>
++                    <td><strong>{subject.name}</strong><p>{subject.description || "Chưa có mô tả"}</p></td>
++                    <td>{dateLabel(subject.createdAtUtc)}</td><td><StatusBadge active={subject.isActive} /></td>
++                    <td>{renderActions(subject)}</td>
++                  </tr>)}</tbody>
++                </table></div> : <div className="ads3-grid">{currentItems.map((subject) => <article className="ads3-card" key={subject.id}>
++                  <div className="ads3-card-head"><span className="ads3-code">{subject.code}</span><StatusBadge active={subject.isActive} /></div>
++                  <h3>{subject.name}</h3><p>{subject.description || "Chưa có mô tả"}</p>
++                  <div className="ads3-card-foot"><span>#{subject.id} · {dateLabel(subject.createdAtUtc)}</span>{renderActions(subject)}</div>
++                </article>)}</div>}
++                <nav className="ads3-pages" aria-label="Phân trang môn học">
++                  <span>Trang <strong>{currentPage}</strong> / {maxPage}</span>
++                  <div><button type="button" disabled={currentPage <= 1} onClick={() => setPage(1)}>Đầu</button>
++                    <button type="button" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Trước</button>
++                    <button type="button" disabled={currentPage >= maxPage} onClick={() => setPage((p) => Math.min(maxPage, p + 1))}>Sau</button>
++                    <button type="button" disabled={currentPage >= maxPage} onClick={() => setPage(maxPage)}>Cuối</button></div>
++                </nav>
++              </>}
+       </section>
++
++      <section className="ads3-note"><span aria-hidden="true">ⓘ</span><div><strong>Quy tắc quản lý an toàn</strong><p>
++        Nên <b>ẩn môn học</b> khi tạm ngừng đào tạo. Xóa là thao tác vĩnh viễn, có thể bị máy chủ từ chối khi môn đã liên kết với tài liệu hoặc dữ liệu khác.
++        Danh sách và thống kê lấy từ API môn học hiện tại; file CSV chỉ xuất dữ liệu đang khớp bộ lọc.</p></div></section>
++
++      {dialog && <div className="ads3-modal-root">
++        <button type="button" className="ads3-modal-backdrop" aria-label="Đóng cửa sổ" onClick={closeDialog} disabled={saving} />
++        <div className="ads3-modal" ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="ads3-dialog-title">
++          <div className="ads3-modal-head"><span className="ads3-modal-icon" aria-hidden="true">▧</span>
++            <button type="button" aria-label="Đóng" className="ads3-icon-button" onClick={closeDialog} disabled={saving}>×</button></div>
++
++          {dialog.kind === "create" || dialog.kind === "edit" ? <>
++            <h2 id="ads3-dialog-title">{dialog.kind === "create" ? "Tạo môn học mới" : "Chỉnh sửa môn học"}</h2>
++            <p className="ads3-modal-sub">Thông tin này được lưu vào hệ thống thông qua API hiện có.</p>
++            <form onSubmit={(event) => void saveSubject(event)} className="ads3-form" noValidate>
++              <label htmlFor="ads3-code">Mã môn học <span>*</span></label>
++              <input ref={initialFocusRef} id="ads3-code" value={form.code} onChange={(event) => setForm((f) => ({ ...f, code: event.target.value.toUpperCase() }))}
++                placeholder="Ví dụ: AI101" maxLength={20} required aria-invalid={invalidCode || existingCode} />
++              <small className={invalidCode || existingCode ? "ads3-field-error" : ""}>{existingCode ? "Mã môn học đã tồn tại trong danh sách." : "Từ 2 đến 20 ký tự, không trùng với mã khác."}</small>
++              <label htmlFor="ads3-name">Tên môn học <span>*</span></label>
++              <input id="ads3-name" value={form.name} onChange={(event) => setForm((f) => ({ ...f, name: event.target.value }))}
++                placeholder="Ví dụ: Nhập môn trí tuệ nhân tạo" maxLength={150} required aria-invalid={invalidName} />
++              <small>{form.name.length}/150 ký tự</small>
++              <label htmlFor="ads3-description">Mô tả môn học</label>
++              <textarea id="ads3-description" rows={4} maxLength={500} value={form.description}
++                placeholder="Nêu nội dung học, kiến thức chính và mục tiêu môn học..."
++                onChange={(event) => setForm((f) => ({ ...f, description: event.target.value }))} />
++              <small>{form.description.length}/500 ký tự</small>
++              <label className="ads3-check"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm((f) => ({ ...f, isActive: event.target.checked }))} />
++                <span>Hiển thị môn học cho học viên (trạng thái hoạt động)</span></label>
++              {actionError && <div className="ads3-inline-error" role="alert">{actionError}</div>}
++              <div className="ads3-modal-actions"><button type="button" className="ads3-btn ads3-btn-neutral" disabled={saving} onClick={closeDialog}>Hủy</button>
++                <button type="submit" className="ads3-btn ads3-btn-primary" disabled={!canSave}>{saving ? "Đang lưu..." : dialog.kind === "create" ? "Tạo môn học" : "Lưu thay đổi"}</button></div>
++            </form>
++          </> : dialog.kind === "details" ? <>
++            <h2 id="ads3-dialog-title">Chi tiết môn học</h2><p className="ads3-modal-sub">Thông tin từ danh mục môn học hiện tại.</p>
++            <dl className="ads3-facts"><div><dt>ID</dt><dd>{dialog.subject.id}</dd></div>
++              <div><dt>Mã môn</dt><dd>{dialog.subject.code}</dd></div><div><dt>Tên môn</dt><dd>{dialog.subject.name}</dd></div>
++              <div><dt>Trạng thái</dt><dd><StatusBadge active={dialog.subject.isActive} /></dd></div>
++              <div><dt>Ngày tạo</dt><dd>{dateLabel(dialog.subject.createdAtUtc)}</dd></div>
++              <div><dt>Mô tả</dt><dd>{dialog.subject.description || "Chưa có mô tả"}</dd></div></dl>
++            <div className="ads3-modal-actions"><button type="button" className="ads3-btn ads3-btn-neutral" onClick={closeDialog}>Đóng</button>
++              <button type="button" className="ads3-btn ads3-btn-primary" onClick={() => openDialog({ kind: "edit", subject: dialog.subject })}>Chỉnh sửa</button></div>
++          </> : dialog.kind === "toggle" ? <>
++            <h2 id="ads3-dialog-title">{dialog.subject.isActive ? "Ẩn môn học này?" : "Hiện lại môn học?"}</h2>
++            <p className="ads3-modal-sub">Bạn đang thay đổi trạng thái môn <b>{dialog.subject.name}</b> ({dialog.subject.code}).</p>
++            <div className="ads3-callout">{dialog.subject.isActive
++              ? "Ẩn môn giúp hạn chế việc chọn môn trong giao diện, nhưng dữ liệu và tài liệu đã liên kết không bị tự động xóa."
++              : "Môn học sẽ được kích hoạt trở lại trong danh mục."}</div>
++            {actionError && <div className="ads3-inline-error" role="alert">{actionError}</div>}
++            <div className="ads3-modal-actions"><button type="button" className="ads3-btn ads3-btn-neutral" disabled={saving} onClick={closeDialog}>Hủy</button>
++              <button type="button" className="ads3-btn ads3-btn-primary" disabled={saving} onClick={() => void confirmAction()}>{saving ? "Đang xử lý..." : "Xác nhận"}</button></div>
++          </> : <>
++            <h2 id="ads3-dialog-title">Xóa vĩnh viễn môn học?</h2>
++            <p className="ads3-modal-sub">Môn <b>{dialog.subject.name}</b> sẽ bị xóa khỏi hệ thống nếu máy chủ cho phép. Không thể khôi phục bằng thao tác này.</p>
++            <div className="ads3-callout ads3-callout-danger">Nếu môn đang có tài liệu hoặc dữ liệu liên quan, thao tác có thể bị từ chối. Nếu chỉ muốn ngừng hiển thị, hãy dùng <b>Ẩn môn</b>.</div>
++            <label className="ads3-delete-label" htmlFor="ads3-delete-confirm">Nhập mã <strong>{dialog.subject.code}</strong> để xác nhận xóa</label>
++            <input id="ads3-delete-confirm" ref={initialFocusRef} value={confirmCode} autoComplete="off" onChange={(event) => setConfirmCode(event.target.value)} placeholder={dialog.subject.code} />
++            {actionError && <div className="ads3-inline-error" role="alert">{actionError}</div>}
++            <div className="ads3-modal-actions"><button type="button" className="ads3-btn ads3-btn-neutral" disabled={saving} onClick={closeDialog}>Hủy</button>
++              <button type="button" className="ads3-btn ads3-btn-danger" disabled={saving || confirmCode.trim().toUpperCase() !== dialog.subject.code.trim().toUpperCase()}
++                onClick={() => void confirmAction()}>{saving ? "Đang xóa..." : "Xóa vĩnh viễn"}</button></div>
++          </>}
++        </div>
++      </div>}
+     </div>
+-  </section>;
++  );
+ }

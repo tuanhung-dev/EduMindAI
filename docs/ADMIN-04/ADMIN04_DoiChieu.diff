@@ -1,0 +1,28 @@
+--- truoc/frontend/src/App.tsx
++++ sau/frontend/src/App.tsx
+@@ -22,6 +22,7 @@
+ import AdminSubjectsPage from "./pages/AdminSubjectsPage";
+ import AdminDashboardPage from "./pages/AdminDashboardPage";
+ import AdminUsersPage from "./pages/AdminUsersPage";
++import AdminDocumentsPage from "./pages/AdminDocumentsPage";
+ import AccountRecoveryPage from "./pages/AccountRecoveryPage";
+ import AccountSettingsPage from "./pages/AccountSettingsPage";
+ import { AuthProvider, useAuth } from "./contexts/AuthContext";
+@@ -98,6 +99,7 @@
+           <Route path="admin" element={<AdminOnly><AdminDashboardPage /></AdminOnly>} />
+           <Route path="admin/users" element={<AdminOnly><AdminUsersPage /></AdminOnly>} />
+           <Route path="admin/subjects" element={<AdminOnly><AdminSubjectsPage /></AdminOnly>} />
++          <Route path="admin/documents" element={<AdminOnly><AdminDocumentsPage /></AdminOnly>} />
+         </Route>
+ 
+         <Route path="*" element={<NotFoundPage />} />
+--- truoc/frontend/src/layouts/AppLayout.tsx
++++ sau/frontend/src/layouts/AppLayout.tsx
+@@ -23,6 +23,7 @@
+   { path: "/app/admin", icon: "◫", label: "Dashboard Admin", end: true },
+   { path: "/app/admin/users", icon: "◉", label: "Quản lý người dùng" },
+   { path: "/app/admin/subjects", icon: "⚙", label: "Quản trị môn học" },
++  { path: "/app/admin/documents", icon: "▤", label: "Quản lý tài liệu" },
+ ];
+ 
+ function getPageName(pathname: string) {

@@ -1,0 +1,603 @@
+{
+  "dateUtc": "2026-10-29T16:26:58.614Z",
+  "selection": "ALL",
+  "frontend": "C:\\Projects\\EduMindAI\\frontend",
+  "api": "(khong thu)",
+  "web": "(khong thu)",
+  "tasks": {
+    "FE-001": {
+      "title": "Khởi tạo React + TypeScript + Vite",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "React + TypeScript + Vite trong package.json",
+          "evidence": ""
+        },
+        {
+          "status": "PASS",
+          "label": "npm scripts dev / build",
+          "evidence": ""
+        },
+        {
+          "status": "PASS",
+          "label": "Cau hinh Vite",
+          "evidence": "vite.config.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "FE doc URL Backend tu env",
+          "evidence": "src/services/apiClient.ts"
+        },
+        {
+          "status": "SKIP",
+          "label": "FE server tra index.html",
+          "evidence": "Them --web de kiem tra server FE"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: npm ci và npm run dev khởi động thành công; mở trang trên trình duyệt.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Network cho thấy request API sử dụng đúng VITE_API_BASE_URL.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "npm ci và npm run dev khởi động thành công; mở trang trên trình duyệt.",
+        "Network cho thấy request API sử dụng đúng VITE_API_BASE_URL."
+      ]
+    },
+    "FE-002": {
+      "title": "Router / Sidebar / Header / 404",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Router va 404",
+          "evidence": "src/App.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Private va AdminOnly guards",
+          "evidence": "src/App.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Sidebar, Header, Outlet",
+          "evidence": "src/layouts/AppLayout.tsx"
+        },
+        {
+          "status": "SKIP",
+          "label": "HTTP route /login (rewrite)",
+          "evidence": "Them --web de kiem tra server FE"
+        },
+        {
+          "status": "SKIP",
+          "label": "HTTP route /app/subjects (rewrite)",
+          "evidence": "Them --web de kiem tra server FE"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Kiểm tra /login, /app/subjects, /app/documents và đường dẫn không tồn tại.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Chưa đăng nhập phải về /login; Student không được vào /app/admin.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Console trình duyệt không có lỗi nghiêm trọng.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Kiểm tra /login, /app/subjects, /app/documents và đường dẫn không tồn tại.",
+        "Chưa đăng nhập phải về /login; Student không được vào /app/admin.",
+        "Console trình duyệt không có lỗi nghiêm trọng."
+      ]
+    },
+    "FE-003": {
+      "title": "Đăng nhập / đăng ký",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Login + Register + loading",
+          "evidence": "src/pages/AuthPage.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Email va mat khau validation",
+          "evidence": "src/utils/authValidation.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "Goi API dang nhap/dang ky",
+          "evidence": "src/services/authService.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "Khong thay ghi password theo key ro rang trong storage",
+          "evidence": "Kiem tra thu cong DevTools van bat buoc"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Nhập email không hợp lệ, mật khẩu yếu, xác nhận sai: thấy thông báo tương ứng.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Đăng ký tài khoản thử nghiệm, đăng nhập đúng và sai: loading/lỗi hiển thị rõ.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: DevTools > Application: không lưu mật khẩu thô trong localStorage/sessionStorage.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Nhập email không hợp lệ, mật khẩu yếu, xác nhận sai: thấy thông báo tương ứng.",
+        "Đăng ký tài khoản thử nghiệm, đăng nhập đúng và sai: loading/lỗi hiển thị rõ.",
+        "DevTools > Application: không lưu mật khẩu thô trong localStorage/sessionStorage."
+      ]
+    },
+    "FE-004": {
+      "title": "API Client / phiên đăng nhập",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Bearer, 401 va 403",
+          "evidence": "src/services/authService.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "API Client dung chung",
+          "evidence": "src/services/apiClient.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "Quyen truy cap va het phien",
+          "evidence": "src/contexts/AuthContext.tsx"
+        },
+        {
+          "status": "SKIP",
+          "label": "GET /api/auth/me (co token)",
+          "evidence": "Them --api de thu HTTP GET"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Đăng nhập và xem Network: Authorization: Bearer <token> trên API cần xác thực.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Hết hạn phiên (401) xử lý đúng; gọi API không đủ quyền (403) có thông báo.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Mất kết nối/HTTP 500 không làm vỡ giao diện.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Đăng nhập và xem Network: Authorization: Bearer <token> trên API cần xác thực.",
+        "Hết hạn phiên (401) xử lý đúng; gọi API không đủ quyền (403) có thông báo.",
+        "Mất kết nối/HTTP 500 không làm vỡ giao diện."
+      ]
+    },
+    "FE-005": {
+      "title": "Danh sách môn học",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "GET subjects API",
+          "evidence": "src/services/subjectService.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "Danh sach, tim kiem, loading/error",
+          "evidence": "src/pages/SubjectsPage.tsx"
+        },
+        {
+          "status": "SKIP",
+          "label": "GET /api/subjects",
+          "evidence": "Them --api de thu HTTP GET"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Trang Môn học hiển thị dữ liệu thật từ GET /api/subjects.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Tìm theo tên/mã; thử API trả [] và khi API lỗi để xác nhận empty/error state.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Trang Môn học hiển thị dữ liệu thật từ GET /api/subjects.",
+        "Tìm theo tên/mã; thử API trả [] và khi API lỗi để xác nhận empty/error state."
+      ]
+    },
+    "FE-006": {
+      "title": "Upload tài liệu",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Upload multipart va danh sach",
+          "evidence": "src/services/documentService.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "File validation va cap nhat danh sach",
+          "evidence": "src/pages/DocumentsPage.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Xu ly trang thai tai lieu",
+          "evidence": "src/pages/DocumentsPage.tsx"
+        },
+        {
+          "status": "SKIP",
+          "label": "GET /api/documents",
+          "evidence": "Them --api de thu HTTP GET"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Upload PDF hợp lệ và kiểm tra danh sách cập nhật sau upload.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Thử file sai định dạng, file 0 byte, file vượt giới hạn; xem thông báo lỗi.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Đối chiếu Pending/Processing/Ready/Failed với phản hồi API.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Upload PDF hợp lệ và kiểm tra danh sách cập nhật sau upload.",
+        "Thử file sai định dạng, file 0 byte, file vượt giới hạn; xem thông báo lỗi.",
+        "Đối chiếu Pending/Processing/Ready/Failed với phản hồi API."
+      ]
+    },
+    "FE-007": {
+      "title": "Chi tiết tài liệu",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Metadata, preview va trang thai",
+          "evidence": "src/pages/DocumentDetailPage.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Route chi tiet tai lieu",
+          "evidence": "src/App.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Dieu kien Ready cho nut Hoi AI (kiem tra UI thu cong)",
+          "evidence": "src/pages/DocumentDetailPage.tsx"
+        },
+        {
+          "status": "SKIP",
+          "label": "GET preview text",
+          "evidence": "Truyen --document-id <id> va EDUMIND_TEST_TOKEN"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Mở /app/documents/<id>: tên/môn/dung lượng/ngày/trạng thái đúng.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Với Processing/Failed/Uploaded: xác minh KHÔNG có request hỏi AI trong Network.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Với Ready: mở Hỏi AI; kiểm tra xem PDF và preview trích xuất Word/PDF.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Mở /app/documents/<id>: tên/môn/dung lượng/ngày/trạng thái đúng.",
+        "Với Processing/Failed/Uploaded: xác minh KHÔNG có request hỏi AI trong Network.",
+        "Với Ready: mở Hỏi AI; kiểm tra xem PDF và preview trích xuất Word/PDF."
+      ]
+    },
+    "FE-008": {
+      "title": "Tóm tắt và Chat RAG",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Chat/tom tat/nguon/loi",
+          "evidence": "src/pages/AiTutorPage.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Service RAG / summary",
+          "evidence": "src/services/aiTutorService.ts"
+        },
+        {
+          "status": "REVIEW",
+          "label": "AI RAG/nguon that",
+          "evidence": "Khong tu dong goi AI, vi co the mat phi hoac ton GPU"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Chỉ dùng tài liệu Ready, yêu cầu tóm tắt và hỏi câu có đáp án trong tài liệu.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Đối chiếu nguồn/trang/citation với response RAG thực tế.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Tắt Ollama/AI trong môi trường test: thông báo lỗi xuất hiện, trang không vỡ.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Kiểm tra AI provider đang dùng để tránh phát sinh phí API ngoài ý muốn.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Chỉ dùng tài liệu Ready, yêu cầu tóm tắt và hỏi câu có đáp án trong tài liệu.",
+        "Đối chiếu nguồn/trang/citation với response RAG thực tế.",
+        "Tắt Ollama/AI trong môi trường test: thông báo lỗi xuất hiện, trang không vỡ.",
+        "Kiểm tra AI provider đang dùng để tránh phát sinh phí API ngoài ý muốn."
+      ]
+    },
+    "FE-009": {
+      "title": "Làm bài Quiz",
+      "checks": [
+        {
+          "status": "FAIL",
+          "label": "Radio + payload questionId/selectedOption",
+          "evidence": "Thieu 2 dau hieu trong src/pages/QuizTakePage.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "API nop bai",
+          "evidence": "src/services/quizService.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "Payload tai diem goi submit khong thay correctOption",
+          "evidence": "Chi la soat xet tinh; can xem Network request"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Chọn radio A/B/C/D và xác nhận không chọn đồng thời 2 đáp án cùng câu.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Trong Network, POST nộp bài chỉ gửi answers[].questionId và selectedOption.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Không gửi correctOption; thử bỏ trống và nhấn nộp 2 lần.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Chọn radio A/B/C/D và xác nhận không chọn đồng thời 2 đáp án cùng câu.",
+        "Trong Network, POST nộp bài chỉ gửi answers[].questionId và selectedOption.",
+        "Không gửi correctOption; thử bỏ trống và nhấn nộp 2 lần."
+      ]
+    },
+    "FE-010": {
+      "title": "Kết quả Quiz",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Ket qua va giai thich tu attempt",
+          "evidence": "src/pages/QuizResultPage.tsx"
+        },
+        {
+          "status": "SKIP",
+          "label": "GET ket qua attempt",
+          "evidence": "Truyen --attempt-id <id> va EDUMIND_TEST_TOKEN"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Nộp bài test và xem GET /api/attempts/<id> trong Network.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Đối chiếu scorePercent, correctCount, totalQuestions trong JSON với giao diện.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Kiểm tra đúng/sai, explanation và nguồn trang (nếu Backend trả).",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Nộp bài test và xem GET /api/attempts/<id> trong Network.",
+        "Đối chiếu scorePercent, correctCount, totalQuestions trong JSON với giao diện.",
+        "Kiểm tra đúng/sai, explanation và nguồn trang (nếu Backend trả)."
+      ]
+    },
+    "FE-011": {
+      "title": "Lịch sử và tiến độ",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "API lich su / tien do",
+          "evidence": "src/services/learningProgressService.ts"
+        },
+        {
+          "status": "PASS",
+          "label": "So luot, diem trung binh, empty state",
+          "evidence": "src/pages/LearningProgressPage.tsx"
+        },
+        {
+          "status": "SKIP",
+          "label": "GET learning/progress",
+          "evidence": "Them --api de thu HTTP GET"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Tài khoản có lượt thi: số bài nộp và điểm TB phải khớp GET /api/learning/progress.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Tài khoản chưa làm bài: hiển thị empty state, không hiện số liệu giả.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Tài khoản có lượt thi: số bài nộp và điểm TB phải khớp GET /api/learning/progress.",
+        "Tài khoản chưa làm bài: hiển thị empty state, không hiện số liệu giả."
+      ]
+    },
+    "FE-012": {
+      "title": "Loading / lỗi / responsive",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Toast chung",
+          "evidence": "src/components/ApiToastHost.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "Toast ket noi App",
+          "evidence": "src/App.tsx"
+        },
+        {
+          "status": "PASS",
+          "label": "CSS thong bao",
+          "evidence": "src/styles/FeedbackSystem.css"
+        },
+        {
+          "status": "PASS",
+          "label": "Co CSS media queries",
+          "evidence": "25 file; can thu resize thuc te"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Thong bao va responsive end-to-end",
+          "evidence": "Phai thu tren trinh duyet o it nhat 2 kich thuoc"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Giả lập mạng chậm / mất mạng / HTTP 403/429/500: không kẹt loading vô hạn.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Xem ở 1366x768 và 390x844: không tràn ngang, nút quan trọng thao tác được.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Toast / loading / empty state / thông báo lỗi rõ ràng trên toàn bộ các luồng P0.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "Giả lập mạng chậm / mất mạng / HTTP 403/429/500: không kẹt loading vô hạn.",
+        "Xem ở 1366x768 và 390x844: không tràn ngang, nút quan trọng thao tác được.",
+        "Toast / loading / empty state / thông báo lỗi rõ ràng trên toàn bộ các luồng P0."
+      ]
+    },
+    "FE-013": {
+      "title": "Production build / CORS / route refresh",
+      "checks": [
+        {
+          "status": "PASS",
+          "label": "Lockfile de tai lap dependencies",
+          "evidence": "package-lock.json"
+        },
+        {
+          "status": "PASS",
+          "label": "Vi du cau hinh public API URL",
+          "evidence": ".env.example"
+        },
+        {
+          "status": "PASS",
+          "label": "Build + lint scripts",
+          "evidence": ""
+        },
+        {
+          "status": "PASS",
+          "label": "npm run lint",
+          "evidence": "exit=0"
+        },
+        {
+          "status": "PASS",
+          "label": "npm run build",
+          "evidence": "exit=0"
+        },
+        {
+          "status": "PASS",
+          "label": "dist/index.html duoc tao tu lan build thanh cong",
+          "evidence": ""
+        },
+        {
+          "status": "SKIP",
+          "label": "CORS preflight (OPTIONS)",
+          "evidence": "Them --api"
+        },
+        {
+          "status": "SKIP",
+          "label": "Route refresh /app/documents",
+          "evidence": "Them --web de kiem tra server FE"
+        },
+        {
+          "status": "SKIP",
+          "label": "Route refresh /app/progress",
+          "evidence": "Them --web de kiem tra server FE"
+        },
+        {
+          "status": "SKIP",
+          "label": "Route refresh /app/admin",
+          "evidence": "Them --web de kiem tra server FE"
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: npm run lint và npm run build chạy thành công trên Windows.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: CORS thử qua trình duyệt từ frontend thật, không chỉ qua TCP/OPTIONS.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Sau khi deploy, F5 /app/documents, /app/progress, /app/admin không bị 404 server.",
+          "evidence": ""
+        },
+        {
+          "status": "REVIEW",
+          "label": "Can kiem thu: Kiểm tra VITE_API_BASE_URL trong bản production, không chứa API key/secret.",
+          "evidence": ""
+        }
+      ],
+      "manual": [
+        "npm run lint và npm run build chạy thành công trên Windows.",
+        "CORS thử qua trình duyệt từ frontend thật, không chỉ qua TCP/OPTIONS.",
+        "Sau khi deploy, F5 /app/documents, /app/progress, /app/admin không bị 404 server.",
+        "Kiểm tra VITE_API_BASE_URL trong bản production, không chứa API key/secret."
+      ]
+    }
+  }
+}

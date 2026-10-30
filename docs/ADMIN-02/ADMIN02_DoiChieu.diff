@@ -1,0 +1,515 @@
+--- a/frontend/src/pages/AdminUsersPage.tsx
++++ b/frontend/src/pages/AdminUsersPage.tsx
+@@ -1,100 +1,395 @@
+-import { useCallback, useEffect, useState, type FormEvent } from "react";
++import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
++import { Link } from "react-router-dom";
+ import { useAuth } from "../contexts/AuthContext";
+ import {
+-  getAdminUsers, setAdminUserRole, setAdminUserStatus,
+-  type AdminUser, type UserPage,
++  getAdminDashboard,
++  getAdminUsers,
++  setAdminUserRole,
++  setAdminUserStatus,
++  type AdminDashboard,
++  type AdminUser,
++  type UserPage,
+ } from "../services/adminService";
+-import "./AdminPages.css";
++import "./AdminUsersPage.css";
++
++type RoleFilter = "all" | "Admin" | "Student";
++type StatusFilter = "all" | "active" | "suspended";
++type Dialog =
++  | { kind: "details"; account: AdminUser }
++  | { kind: "status"; account: AdminUser; suspended: boolean }
++  | { kind: "role"; account: AdminUser; role: "Admin" | "Student" };
++
++const getErrorMessage = (error: unknown, fallback: string) =>
++  error instanceof Error && error.message ? error.message : fallback;
++
++const avatarLetters = (email: string | null): string => {
++  const local = (email ?? "").split("@")[0].trim();
++  if (!local) return "ND";
++  return local.slice(0, 2).toLocaleUpperCase("vi-VN");
++};
++
++function AccountBadge({ account }: { account: AdminUser }) {
++  return (
++    <span className={`eau-state ${account.suspended ? "eau-state--locked" : "eau-state--active"}`}>
++      <span className="eau-state-dot" aria-hidden="true" />
++      {account.suspended ? "Đang khóa" : "Hoạt động"}
++    </span>
++  );
++}
+ 
+ export default function AdminUsersPage() {
+   const { user } = useAuth();
+-  const [search, setSearch] = useState("");
+-  const [term, setTerm] = useState("");
++  const [inputSearch, setInputSearch] = useState("");
++  const [appliedSearch, setAppliedSearch] = useState("");
+   const [page, setPage] = useState(1);
++  const [refreshKey, setRefreshKey] = useState(0);
+   const [data, setData] = useState<UserPage | null>(null);
++  const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
++  const [statsError, setStatsError] = useState(false);
+   const [loading, setLoading] = useState(true);
+-  const [busyId, setBusyId] = useState<string | null>(null);
+   const [error, setError] = useState("");
+   const [notice, setNotice] = useState("");
+-
+-  const reload = useCallback(async () => {
+-    setError(""); setLoading(true);
+-    try { setData(await getAdminUsers(term, page)); }
+-    catch (err) { setError(err instanceof Error ? err.message : "Không tải được danh sách."); }
+-    finally { setLoading(false); }
+-  }, [term, page]);
++  const [dialogNotice, setDialogNotice] = useState("");
++  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
++  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
++  const [dialog, setDialog] = useState<Dialog | null>(null);
++  const [busyId, setBusyId] = useState<string | null>(null);
++  const dialogRef = useRef<HTMLDivElement>(null);
++  const primaryRef = useRef<HTMLButtonElement>(null);
++  const modalCloseRef = useRef<HTMLButtonElement>(null);
++  const actionInFlightRef = useRef(false);
++  const lastTriggerRef = useRef<HTMLButtonElement | null>(null);
++
+   useEffect(() => {
+-    let active = true;
+-    getAdminUsers(term, page)
+-      .then(result => { if (active) setData(result); })
+-      .catch(err => { if (active) setError(err instanceof Error ? err.message : "Không tải được danh sách."); })
+-      .finally(() => { if (active) setLoading(false); });
+-    return () => { active = false; };
+-  }, [term, page]);
+-
+-  function submit(event: FormEvent<HTMLFormElement>) {
++    let live = true;
++    getAdminUsers(appliedSearch, page)
++      .then((result) => {
++        if (!live) return;
++        setData(result);
++        setError("");
++      })
++      .catch((err: unknown) => {
++        if (!live) return;
++        setData(null);
++        setError(getErrorMessage(err, "Không thể tải danh sách người dùng."));
++      })
++      .finally(() => {
++        if (live) setLoading(false);
++      });
++    return () => { live = false; };
++  }, [appliedSearch, page, refreshKey]);
++
++  useEffect(() => {
++    let live = true;
++    getAdminDashboard()
++      .then((result) => {
++        if (!live) return;
++        setDashboard(result);
++        setStatsError(false);
++      })
++      .catch(() => {
++        if (!live) return;
++        setDashboard(null);
++        setStatsError(true);
++      });
++    return () => { live = false; };
++  }, [refreshKey]);
++
++  const visibleUsers = useMemo(() => {
++    return (data?.items ?? []).filter((account) => {
++      if (roleFilter !== "all" && account.role !== roleFilter) return false;
++      if (statusFilter === "active" && account.suspended) return false;
++      if (statusFilter === "suspended" && !account.suspended) return false;
++      return true;
++    });
++  }, [data, roleFilter, statusFilter]);
++
++  const hasLocalFilter = roleFilter !== "all" || statusFilter !== "all";
++  const shownPage = data?.page ?? page;
++  const totalPages = Math.max(1, data?.totalPages ?? 1);
++  const pageUsers = data?.items ?? [];
++  const pageAdmins = pageUsers.filter((item) => item.role === "Admin").length;
++  const pageLocked = pageUsers.filter((item) => item.suspended).length;
++
++  function refresh() {
++    setLoading(true);
++    setError("");
++    setRefreshKey((value) => value + 1);
++  }
++
++  function handleSearch(event: FormEvent<HTMLFormElement>) {
+     event.preventDefault();
+-    const requested = search.trim();
+-    if (requested === term && page === 1) { void reload(); return; }
+-    setLoading(true); setPage(1); setTerm(requested);
+-  }
+-  async function changeStatus(account: AdminUser) {
+-    const next = !account.suspended;
+-    if (!window.confirm(`${next ? "Khóa" : "Mở khóa"} tài khoản ${account.email || account.id}?`)) return;
+-    setBusyId(account.id); setNotice(""); setError("");
+-    try { await setAdminUserStatus(account.id, next); setNotice("Đã cập nhật trạng thái tài khoản."); await reload(); }
+-    catch (err) { setError(err instanceof Error ? err.message : "Không cập nhật được."); }
+-    finally { setBusyId(null); }
+-  }
+-  async function changeRole(account: AdminUser) {
+-    const next = account.role === "Admin" ? "Student" : "Admin";
+-    if (!window.confirm(`Đổi vai trò của ${account.email || account.id} thành ${next}? Hành động này thay đổi quyền truy cập API.`)) return;
+-    setBusyId(account.id); setNotice(""); setError("");
+-    try { await setAdminUserRole(account.id, next); setNotice("Đã thay đổi vai trò tài khoản."); await reload(); }
+-    catch (err) { setError(err instanceof Error ? err.message : "Không cập nhật được."); }
+-    finally { setBusyId(null); }
+-  }
+-
+-  return <div className="admin-page">
+-    <div className="admin-heading"><div><p className="admin-eyebrow">QUẢN TRỊ HỆ THỐNG</p><h1>Quản lý người dùng</h1>
+-      <p>Tìm tài khoản và quản lý quyền truy cập. Xác minh email hiện không bắt buộc.</p></div></div>
+-    <form className="admin-search" onSubmit={submit}>
+-      <input aria-label="Tìm kiếm email hoặc ID" placeholder="Tìm theo email hoặc ID…" maxLength={100}
+-        value={search} onChange={e => setSearch(e.target.value)} />
+-      <button type="submit" disabled={loading}>Tìm kiếm</button>
+-    </form>
+-    {error && <p className="admin-alert" role="alert">{error}</p>}
+-    {notice && <p className="admin-success" role="status">{notice}</p>}
+-    <div className="admin-panel admin-table-wrap">
+-      <table className="admin-table"><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Email</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+-        <tbody>
+-          {data?.items.map(account => {
+-            const isSelf = account.id === user?.id;
+-            const disabled = !!busyId || isSelf;
+-            return <tr key={account.id}>
+-              <td><strong>{account.email || "(Chưa có email)"}</strong><small title={account.id}>{account.id.slice(0, 12)}…</small></td>
+-              <td><span className="admin-pill">{account.role}</span></td>
+-              <td>{account.emailConfirmed ? "Đã xác minh" : "Chưa xác minh"}</td>
+-              <td>{account.suspended ? <span className="admin-danger">Đang khóa</span> : "Hoạt động"}</td>
+-              <td><div className="admin-actions">
+-                <button type="button" disabled={disabled || account.role === "Admin"}
+-                  title={account.role === "Admin" ? "Không hỗ trợ khóa Admin" : undefined}
+-                  onClick={() => void changeStatus(account)}>{account.suspended ? "Mở khóa" : "Khóa"}</button>
+-                <button type="button" disabled={disabled || (account.role === "Student" && account.suspended)}
+-                  onClick={() => void changeRole(account)}>{account.role === "Admin" ? "Hạ quyền" : "Cấp Admin"}</button>
+-                {isSelf && <span className="admin-muted">Tài khoản của bạn</span>}
+-              </div></td>
+-            </tr>;
+-          })}
+-          {!loading && !data?.items.length && <tr><td colSpan={5}>Không tìm thấy tài khoản phù hợp.</td></tr>}
+-        </tbody></table>
+-      {loading && <p role="status">Đang tải danh sách…</p>}
++    const value = inputSearch.trim();
++    setNotice("");
++    if (value === appliedSearch && page === 1) {
++      refresh();
++      return;
++    }
++    setLoading(true);
++    setPage(1);
++    setAppliedSearch(value);
++    setRoleFilter("all");
++    setStatusFilter("all");
++    // page/search change triggers the request; avoid duplicate refreshes.
++  }
++
++  function resetSearch() {
++    setInputSearch("");
++    setRoleFilter("all");
++    setStatusFilter("all");
++    if (appliedSearch || page !== 1) {
++      setLoading(true);
++      setPage(1);
++      setAppliedSearch("");
++    }
++  }
++
++  function changePage(nextPage: number) {
++    if (loading || busyId || nextPage < 1 || nextPage > totalPages || nextPage === page) return;
++    setLoading(true);
++    setError("");
++    setNotice("");
++    setPage(nextPage);
++  }
++
++  function openDialog(next: Dialog, trigger: HTMLButtonElement) {
++    if (busyId || loading) return;
++    lastTriggerRef.current = trigger;
++    setError("");
++    setDialogNotice("");
++    setDialog(next);
++  }
++
++  function closeDialog() {
++    if (busyId) return;
++    setDialog(null);
++    window.requestAnimationFrame(() => lastTriggerRef.current?.focus());
++  }
++
++  useEffect(() => {
++    if (!dialog) return;
++    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
++    if (primaryRef.current) primaryRef.current.focus();
++    else modalCloseRef.current?.focus();
++    const onKeyDown = (event: globalThis.KeyboardEvent) => {
++      if (event.key === "Escape") {
++        if (!actionInFlightRef.current) {
++          event.preventDefault();
++          setDialog(null);
++          window.requestAnimationFrame(() => lastTriggerRef.current?.focus());
++        }
++        return;
++      }
++      if (event.key !== "Tab") return;
++      const interactive = Array.from(
++        dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? []
++      );
++      if (!interactive.length) return;
++      const first = interactive[0];
++      const last = interactive[interactive.length - 1];
++      if (event.shiftKey && document.activeElement === first) {
++        event.preventDefault(); last.focus();
++      } else if (!event.shiftKey && document.activeElement === last) {
++        event.preventDefault(); first.focus();
++      }
++    };
++    document.addEventListener("keydown", onKeyDown);
++    return () => {
++      document.removeEventListener("keydown", onKeyDown);
++      previousFocus?.focus();
++    };
++  }, [dialog]);
++
++  async function confirmChange() {
++    if (!dialog || dialog.kind === "details" || busyId || actionInFlightRef.current) return;
++    const { account } = dialog;
++    // Frontend guard; backend authorizes and validates again.
++    if (account.id === user?.id) {
++      setError("Không thể thay đổi vai trò hoặc khóa tài khoản đang đăng nhập.");
++      setDialog(null);
++      return;
++    }
++    if (dialog.kind === "status" && account.role === "Admin") {
++      setError("Không thể khóa hoặc mở khóa quản trị viên tại màn hình này.");
++      setDialog(null);
++      return;
++    }
++    if (dialog.kind === "role" && dialog.role === "Admin" && account.suspended) {
++      setError("Hãy mở khóa tài khoản học viên trước khi cấp quyền Admin.");
++      setDialog(null);
++      return;
++    }
++
++    actionInFlightRef.current = true;
++    setBusyId(account.id);
++    setError("");
++    setNotice("");
++    try {
++      if (dialog.kind === "status") {
++        await setAdminUserStatus(account.id, dialog.suspended);
++        setNotice(dialog.suspended ? `Đã khóa ${account.email ?? account.id}.` : `Đã mở khóa ${account.email ?? account.id}.`);
++      } else {
++        await setAdminUserRole(account.id, dialog.role);
++        setNotice(dialog.role === "Admin" ? `Đã cấp quyền Admin cho ${account.email ?? account.id}.` : `Đã chuyển ${account.email ?? account.id} về vai trò Học viên.`);
++      }
++      setDialog(null);
++      setLoading(true);
++      setRefreshKey((value) => value + 1);
++    } catch (err: unknown) {
++      // Keep the dialog open so the administrator can read the error safely.
++      setError(getErrorMessage(err, "Không thể thực hiện thay đổi. Vui lòng thử lại."));
++    } finally {
++      actionInFlightRef.current = false;
++      setBusyId(null);
++    }
++  }
++
++  async function copyId(id: string) {
++    try {
++      await navigator.clipboard.writeText(id);
++      setDialogNotice("Đã sao chép ID tài khoản.");
++      setError("");
++    } catch {
++      setDialogNotice("Không thể sao chép tự động. Hãy chọn dòng mã tài khoản ở trên để sao chép thủ công.");
++    }
++  }
++
++  const badgeFor = (label: string, value: number | undefined, icon: string) => (
++    <article className="eau-stat" key={label}>
++      <span className="eau-stat-icon" aria-hidden="true">{icon}</span>
++      <div><span>{label}</span><strong>{value === undefined ? "—" : value.toLocaleString("vi-VN")}</strong></div>
++    </article>
++  );
++
++  return (
++    <div className="eau-page">
++      <nav className="eau-breadcrumb" aria-label="Đường dẫn quản trị">
++        <Link to="/app/admin">Trung tâm quản trị</Link><span aria-hidden="true">/</span><span>Người dùng</span>
++      </nav>
++
++      <header className="eau-hero">
++        <div className="eau-hero-copy">
++          <span className="eau-eyebrow">EDUMIND AI · ADMIN CONTROL</span>
++          <h1>Quản lý người dùng</h1>
++          <p>Theo dõi tài khoản, kiểm tra trạng thái và kiểm soát quyền truy cập hệ thống một cách an toàn.</p>
++          <div className="eau-hero-tags"><span>✓ Phân quyền rõ ràng</span><span>✓ Xác nhận trước khi thay đổi</span><span>✓ Dữ liệu từ API thật</span></div>
++        </div>
++        <div className="eau-hero-actions">
++          <Link to="/app/admin" className="eau-btn eau-btn-light">← Tổng quan Admin</Link>
++          <button type="button" className="eau-btn eau-btn-outline" onClick={refresh} disabled={loading || !!busyId}>↻ Làm mới dữ liệu</button>
++        </div>
++      </header>
++
++      <section className="eau-stats-section" aria-label="Thống kê tài khoản toàn hệ thống">
++        <div className="eau-stats-heading"><h2>Tổng quan tài khoản</h2><span>{statsError ? "Không tải được chỉ số hệ thống" : "Số liệu toàn hệ thống"}</span></div>
++        <div className="eau-stats">
++          {badgeFor("Tổng tài khoản", dashboard?.summary.totalUsers, "▣")}
++          {badgeFor("Quản trị viên", dashboard?.summary.adminUsers, "✦")}
++          {badgeFor("Đang bị khóa", dashboard?.summary.suspendedUsers, "⊘")}
++          {badgeFor("Email đã xác minh", dashboard?.summary.verifiedUsers, "✓")}
++        </div>
++      </section>
++
++      <section className="eau-directory" aria-labelledby="eau-directory-title">
++        <div className="eau-directory-heading">
++          <div><span className="eau-section-kicker">DANH SÁCH VÀ PHÂN QUYỀN</span><h2 id="eau-directory-title">Danh sách người dùng</h2>
++            <p>Tìm theo email hoặc ID trên toàn bộ cơ sở dữ liệu; bộ lọc bên dưới chỉ áp dụng cho trang đang xem.</p></div>
++        </div>
++
++        <form className="eau-search-form" onSubmit={handleSearch} role="search">
++          <label className="eau-search-field" htmlFor="eau-search">
++            <span className="eau-search-icon" aria-hidden="true">⌕</span>
++            <input id="eau-search" type="search" maxLength={100} value={inputSearch} onChange={(event) => setInputSearch(event.target.value)} placeholder="Tìm theo email hoặc ID tài khoản..." />
++          </label>
++          <button type="submit" className="eau-btn eau-btn-primary" disabled={loading || !!busyId}>Tìm kiếm</button>
++          {(inputSearch || appliedSearch) && <button type="button" className="eau-btn eau-btn-neutral" onClick={resetSearch} disabled={loading || !!busyId}>Xóa tìm kiếm</button>}
++        </form>
++
++        <div className="eau-filter-bar">
++          <div className="eau-filter-fields">
++            <label>Vai trò <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as RoleFilter)} disabled={loading}>
++              <option value="all">Tất cả vai trò</option><option value="Admin">Quản trị viên</option><option value="Student">Học viên</option>
++            </select></label>
++            <label>Trạng thái <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} disabled={loading}>
++              <option value="all">Tất cả trạng thái</option><option value="active">Đang hoạt động</option><option value="suspended">Đang khóa</option>
++            </select></label>
++          </div>
++          <span className="eau-filter-hint">Bộ lọc áp dụng trong {pageUsers.length} tài khoản của trang này</span>
++        </div>
++
++        {error && <div role="alert" className="eau-alert eau-alert-error"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="Đóng lỗi">×</button></div>}
++        {notice && <div role="status" className="eau-alert eau-alert-success"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Đóng thông báo">×</button></div>}
++
++        {loading ? <div className="eau-feedback" role="status"><div className="eau-spinner" aria-hidden="true" /><strong>Đang tải danh sách tài khoản...</strong><p>Đang lấy dữ liệu phân trang từ hệ thống.</p></div>
++        : !data ? <div className="eau-feedback"><span aria-hidden="true">!</span><strong>Không tải được danh sách</strong><p>Vui lòng kiểm tra kết nối hoặc quyền Admin, sau đó thử lại.</p><button type="button" className="eau-btn eau-btn-primary" onClick={refresh}>Thử tải lại</button></div>
++        : data.items.length === 0 ? <div className="eau-feedback"><span aria-hidden="true">⌕</span><strong>Không tìm thấy tài khoản</strong><p>Thử một phần email hoặc ID khác.</p><button type="button" className="eau-btn eau-btn-primary" onClick={resetSearch}>Xóa từ khóa</button></div>
++        : visibleUsers.length === 0 ? <div className="eau-feedback"><span aria-hidden="true">▤</span><strong>Không có tài khoản phù hợp bộ lọc</strong><p>Đây chỉ là bộ lọc trên trang hiện tại; thử trang khác hoặc bỏ bộ lọc.</p><button type="button" className="eau-btn eau-btn-primary" onClick={() => { setRoleFilter("all"); setStatusFilter("all"); }}>Bỏ bộ lọc</button></div>
++        : <>
++          <div className="eau-results-caption" aria-live="polite">
++            <span>Hiển thị <strong>{visibleUsers.length}</strong> / {data.items.length} tài khoản của trang {shownPage}; tìm kiếm server có <strong>{data.total.toLocaleString("vi-VN")}</strong> kết quả.</span>
++            <span>Trang hiện tại: {pageAdmins} Admin · {pageLocked} đang khóa</span>
++          </div>
++          <div className="eau-table-scroll" role="region" aria-label="Bảng quản lý người dùng" tabIndex={0}>
++            <table className="eau-table"><thead><tr><th scope="col">Người dùng</th><th scope="col">Vai trò</th><th scope="col">Trạng thái</th><th scope="col">Xác minh</th><th scope="col">Quản lý</th></tr></thead>
++              <tbody>{visibleUsers.map((account) => {
++                const self = account.id === user?.id;
++                const blocked = !!busyId || self;
++                const canLock = !blocked && account.role !== "Admin";
++                const canPromote = !blocked && !(account.role === "Student" && account.suspended);
++                return <tr key={account.id}>
++                  <td><div className="eau-user-cell"><div className="eau-avatar" aria-hidden="true">{avatarLetters(account.email)}</div><div className="eau-user-meta">
++                    <strong title={account.email ?? undefined}>{account.email || "Chưa có email"}</strong>
++                    <span className="eau-user-sub"><span>ID: {account.id.slice(0, 8)}…</span>{self && <span className="eau-self-label">Tài khoản của bạn</span>}</span>
++                  </div></div></td>
++                  <td><span className={`eau-role ${account.role === "Admin" ? "eau-role--admin" : ""}`}>{account.role === "Admin" ? "✦ Admin" : "Học viên"}</span></td>
++                  <td><AccountBadge account={account} /></td>
++                  <td><span className={account.emailConfirmed ? "eau-verified" : "eau-unverified"}>{account.emailConfirmed ? "✓ Đã xác minh" : "○ Chưa xác minh"}</span></td>
++                  <td><div className="eau-row-actions">
++                    <button type="button" className="eau-action eau-action-detail" onClick={(e) => openDialog({ kind: "details", account }, e.currentTarget)} disabled={!!busyId}>Chi tiết</button>
++                    <button type="button" className="eau-action" onClick={(e) => openDialog({ kind: "role", account, role: account.role === "Admin" ? "Student" : "Admin" }, e.currentTarget)} disabled={!canPromote} title={self ? "Không thể đổi quyền chính mình" : account.suspended ? "Hãy mở khóa trước khi cấp quyền Admin" : undefined}>{account.role === "Admin" ? "Hạ quyền" : "Cấp Admin"}</button>
++                    <button type="button" className={`eau-action ${account.suspended ? "" : "eau-action-danger"}`} onClick={(e) => openDialog({ kind: "status", account, suspended: !account.suspended }, e.currentTarget)} disabled={!canLock} title={account.role === "Admin" ? "Không hỗ trợ khóa Admin" : self ? "Không thể tự khóa mình" : undefined}>{account.suspended ? "Mở khóa" : "Khóa"}</button>
++                  </div></td>
++                </tr>;
++              })}</tbody>
++            </table>
++          </div>
++        </>}
++
++        {data && data.total > 0 && <div className="eau-pagination">
++          <span>Trang <strong>{shownPage}</strong> / {totalPages} · {data.total.toLocaleString("vi-VN")} kết quả {appliedSearch && `cho “${appliedSearch}”`}</span>
++          <div><button type="button" onClick={() => changePage(page - 1)} disabled={loading || !!busyId || page <= 1}>← Trang trước</button>
++            <button type="button" onClick={() => changePage(page + 1)} disabled={loading || !!busyId || page >= totalPages}>Trang sau →</button></div>
++        </div>}
++        {hasLocalFilter && <p className="eau-filter-warning">Lưu ý: Vai trò và Trạng thái được lọc trên 15 tài khoản/trang do API hiện chưa cung cấp bộ lọc toàn hệ thống. Hãy chuyển trang để kiểm tra các tài khoản khác.</p>}
++      </section>
++
++      <aside className="eau-security-note"><span aria-hidden="true">ⓘ</span><div><strong>Quản lý tài khoản an toàn</strong><p>Không thể tự hạ quyền hoặc tự khóa tài khoản đang đăng nhập. Admin không thể bị khóa tại màn hình này; quyền Admin cuối cùng được bảo vệ bởi API. Trang này chưa hỗ trợ xóa tài khoản, tạo tài khoản hay đặt lại mật khẩu cho người khác.</p></div></aside>
++
++      {dialog && <div className="eau-modal-root">
++        <button type="button" className="eau-modal-backdrop" aria-label="Đóng cửa sổ" onClick={closeDialog} disabled={!!busyId} />
++        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="eau-modal-title" aria-describedby="eau-modal-description" className="eau-modal">
++          <div className="eau-modal-top"><span className="eau-modal-icon" aria-hidden="true">{dialog.kind === "details" ? "▤" : dialog.kind === "role" ? "✦" : "⊘"}</span><button type="button" onClick={closeDialog} disabled={!!busyId} aria-label="Đóng cửa sổ" ref={modalCloseRef}>×</button></div>
++          <h2 id="eau-modal-title">{dialog.kind === "details" ? "Thông tin tài khoản" : dialog.kind === "role" ? "Xác nhận thay đổi quyền" : dialog.suspended ? "Xác nhận khóa tài khoản" : "Xác nhận mở khóa tài khoản"}</h2>
++          <p id="eau-modal-description">{dialog.kind === "details" ? "Thông tin lấy từ API quản trị, không chứa dữ liệu riêng tư." : "Thao tác này ảnh hưởng đến quyền sử dụng EduMindAI. Hãy kiểm tra đúng tài khoản trước khi xác nhận."}</p>
++          <dl className="eau-modal-facts">
++            <div><dt>Email</dt><dd>{dialog.account.email || "Chưa có email"}</dd></div>
++            <div><dt>Mã tài khoản</dt><dd className="eau-break-id">{dialog.account.id}</dd></div>
++            <div><dt>Vai trò hiện tại</dt><dd>{dialog.account.role === "Admin" ? "Quản trị viên" : "Học viên"}</dd></div>
++            <div><dt>Trạng thái hiện tại</dt><dd>{dialog.account.suspended ? "Đang khóa" : "Hoạt động"}</dd></div>
++            {dialog.kind === "details" && <><div><dt>Xác minh email</dt><dd>{dialog.account.emailConfirmed ? "Đã xác minh" : "Chưa xác minh"}</dd></div><div><dt>Số lần đăng nhập lỗi</dt><dd>{dialog.account.accessFailedCount}</dd></div></>}
++            {dialog.kind === "role" && <div className="eau-modal-highlight"><dt>Vai trò sau khi thay đổi</dt><dd>{dialog.role === "Admin" ? "Quản trị viên — quyền quản lý" : "Học viên — quyền học tập"}</dd></div>}
++            {dialog.kind === "status" && <div className="eau-modal-highlight"><dt>Trạng thái sau khi thay đổi</dt><dd>{dialog.suspended ? "Khóa tài khoản" : "Mở khóa tài khoản"}</dd></div>}
++          </dl>
++          {dialog.kind === "role" && dialog.role === "Admin" && <p className="eau-modal-warning">Cấp quyền Admin cho phép tài khoản này truy cập API và khu vực quản trị. Chỉ thực hiện với người được ủy quyền.</p>}
++          {dialogNotice && <p className="eau-modal-copy-notice" role="status">{dialogNotice}</p>}
++          {error && <p className="eau-modal-error" role="alert">{error}</p>}
++          <div className="eau-modal-actions">
++            {dialog.kind === "details" && <button type="button" className="eau-btn eau-btn-neutral" onClick={() => void copyId(dialog.account.id)}>▢ Sao chép ID</button>}
++            <button type="button" className="eau-btn eau-btn-neutral" onClick={closeDialog} disabled={!!busyId}>{dialog.kind === "details" ? "Đóng" : "Hủy"}</button>
++            {dialog.kind !== "details" && <button type="button" ref={primaryRef} onClick={() => void confirmChange()} className={`eau-btn ${dialog.kind === "status" && dialog.suspended ? "eau-btn-danger" : "eau-btn-primary"}`} disabled={!!busyId}>{busyId ? "Đang cập nhật..." : "Xác nhận thay đổi"}</button>}
++          </div>
++        </div>
++      </div>}
+     </div>
+-    {data && <div className="admin-pager">
+-      <span>{data.total} tài khoản · Trang {data.page} / {Math.max(1, data.totalPages)}</span>
+-      <div><button type="button" disabled={loading || page <= 1} onClick={() => { setLoading(true); setPage(p => p - 1); }}>← Trước</button>
+-      <button type="button" disabled={loading || page >= data.totalPages} onClick={() => { setLoading(true); setPage(p => p + 1); }}>Sau →</button></div>
+-    </div>}
+-    <p className="admin-muted">Các thay đổi quyền được kiểm tra tại Backend. Không hỗ trợ xóa tài khoản hay tự chuyển dữ liệu cũ sang người dùng khác.</p>
+-  </div>;
++  );
+ }
+
+--- /dev/null
++++ b/frontend/src/pages/AdminUsersPage.css
++/* ADMIN-02 · Quản lý người dùng — độc lập với CSS các trang khác. */
++.eau-page{--eau-ink:#1c402f;--eau-muted:#75887b;--eau-line:#dfeae2;--eau-green:#17785b;max-width:1380px;min-width:0;margin:0 auto;padding-bottom:36px;color:var(--eau-ink)}
++.eau-page *,.eau-page *::before,.eau-page *::after{box-sizing:border-box}
++.eau-page a{text-decoration:none}.eau-page button,.eau-page input,.eau-page select{font:inherit}
++.eau-page :is(button,input,select,a):focus-visible{outline:3px solid #72c59e;outline-offset:2px}
++.eau-breadcrumb{display:flex;align-items:center;gap:10px;font-size:12px;color:#7a9080;margin:4px 0 14px}.eau-breadcrumb a{color:#1d775a;font-weight:700}.eau-breadcrumb a:hover{text-decoration:underline}
++.eau-hero{background:linear-gradient(115deg,#153f30 0%,#136148 65%,#168063 100%);padding:clamp(24px,3vw,38px);border-radius:23px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:25px;color:#fff;position:relative;overflow:hidden}
++.eau-hero::after{content:"";position:absolute;right:-160px;top:-165px;width:340px;height:340px;border:1px solid #ffffff28;border-radius:50%;box-shadow:0 0 0 70px #ffffff08,0 0 0 135px #ffffff06;pointer-events:none}.eau-hero-copy,.eau-hero-actions{position:relative;z-index:1}
++.eau-eyebrow{font-weight:850;font-size:10px;letter-spacing:1.4px;color:#b5e9ca}.eau-hero h1{color:#fff;font-size:clamp(27px,3vw,37px);margin:10px 0 8px;letter-spacing:-.7px;line-height:1.2}.eau-hero p{color:#e2f4e8;margin:0;max-width:650px;font-size:13px;line-height:1.8}.eau-hero-tags{display:flex;flex-wrap:wrap;gap:9px 20px;color:#c8ebd5;font-size:11px;margin-top:17px}.eau-hero-actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
++.eau-btn{min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 15px;border-radius:11px;border:1px solid transparent;font-size:12px!important;font-weight:800!important;cursor:pointer;transition:background .15s,transform .15s;white-space:nowrap}.eau-btn:hover:not(:disabled){transform:translateY(-1px)}.eau-btn:disabled{opacity:.5;cursor:not-allowed}
++.eau-btn-light{color:#126146!important;background:#fff}.eau-btn-light:hover{background:#effbf2}.eau-btn-outline{color:#fff!important;background:#ffffff16;border-color:#ffffff77}.eau-btn-outline:hover{background:#ffffff25}.eau-btn-primary{background:#197b5a;color:#fff!important}.eau-btn-primary:hover{background:#106748}.eau-btn-neutral{color:#315c43!important;background:#f4f9f5;border-color:#d9e7dd}.eau-btn-danger{background:#b93e49;color:#fff!important}.eau-btn-danger:hover{background:#9a2536}
++.eau-stats-section{margin-top:24px}.eau-stats-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:11px}.eau-stats-heading h2{font-size:18px;margin:0;color:#194330}.eau-stats-heading>span{font-size:11px;color:var(--eau-muted)}.eau-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
++.eau-stat{min-width:0;display:flex;align-items:center;gap:12px;padding:19px;background:#fff;border:1px solid var(--eau-line);border-radius:16px}.eau-stat-icon{display:grid;place-items:center;width:43px;height:43px;border-radius:13px;background:#e5f6ed;color:#167b58;font-size:23px;flex:none}.eau-stat>div{display:grid;gap:6px;min-width:0}.eau-stat>div>span{color:#6d8274;font-size:11px}.eau-stat strong{color:#1b5038;font-variant-numeric:tabular-nums;font-size:25px;line-height:1.1}
++.eau-directory{margin-top:27px;background:#fff;border:1px solid var(--eau-line);border-radius:21px;padding:clamp(16px,2.5vw,26px);min-width:0}.eau-directory-heading{margin-bottom:20px}.eau-section-kicker{color:#187f60;font-size:10px;font-weight:850;letter-spacing:1.1px}.eau-directory-heading h2{font-size:23px;color:#19422f;margin:6px 0}.eau-directory-heading p{font-size:12px;line-height:1.7;color:var(--eau-muted);margin:0}
++.eau-search-form{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}.eau-search-field{flex:1;min-width:min(100%,240px);display:flex;align-items:center;border:1px solid #d7e6dc;background:#fbfdfa;border-radius:12px;padding:0 12px;min-height:43px}.eau-search-field:focus-within{border-color:#159569;box-shadow:0 0 0 3px #2ab27816}.eau-search-field input{min-width:0;width:100%;outline:0;border:0;background:transparent;font-size:12px;padding:10px 5px;color:#224c37}.eau-search-icon{font-size:22px;color:#708e77}.eau-search-field input::placeholder{color:#9aa9a0}
++.eau-filter-bar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin:14px 0;padding:13px 0;border-top:1px solid #edf2ee;border-bottom:1px solid #edf2ee}.eau-filter-fields{display:flex;gap:12px;flex-wrap:wrap}.eau-filter-fields label{display:grid;gap:6px;font-weight:750;font-size:11px;color:#4f6a57}.eau-filter-fields select{border:1px solid #d8e5dc;background:#f9fcfa;border-radius:9px;min-height:37px;padding:7px 12px;font-size:12px;min-width:170px;color:#325740;cursor:pointer}.eau-filter-hint{font-size:11px;color:#809287;line-height:1.6}
++.eau-alert{display:flex;align-items:start;justify-content:space-between;gap:14px;border-radius:11px;margin:12px 0;padding:12px 14px;font-size:12px;line-height:1.65}.eau-alert button{border:0;background:transparent;cursor:pointer;font-size:18px}.eau-alert-error{background:#fff2f1;color:#a63838;border:1px solid #f3d3cf}.eau-alert-success{background:#ebf8ef;color:#176849;border:1px solid #cee8d6}
++.eau-feedback{padding:50px 18px;min-height:240px;border:1px dashed #d7e6da;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;background:#fcfefd}.eau-feedback>span{font-size:34px;color:#2c956b}.eau-feedback strong{font-size:15px;color:#214b37}.eau-feedback p{margin:0 0 5px;font-size:12px;line-height:1.7;color:#7d8f82}.eau-spinner{width:30px;height:30px;border:3px solid #cfe8da;border-top-color:#188762;border-radius:50%;animation:eau-spin .9s linear infinite}@keyframes eau-spin{to{transform:rotate(360deg)}}
++.eau-results-caption{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:#778879;line-height:1.65;margin:7px 0 12px}.eau-results-caption strong{color:#176b4d}.eau-table-scroll{width:100%;overflow:auto;border:1px solid #e3ece5;border-radius:13px;scrollbar-width:thin}.eau-table{border-collapse:collapse;width:100%;min-width:970px;text-align:left;font-size:12px}.eau-table thead{background:#f5faf6}.eau-table th{color:#67806d;letter-spacing:.2px;font-size:11px;font-weight:800;white-space:nowrap;padding:14px;border-bottom:1px solid #e3ece5}.eau-table td{padding:14px;border-bottom:1px solid #edf2ed;vertical-align:middle}.eau-table tbody tr:last-child td{border-bottom:0}.eau-table tbody tr:hover{background:#fcfefd}
++.eau-user-cell{display:flex;align-items:center;gap:10px;min-width:205px}.eau-avatar{width:38px;height:38px;border-radius:12px;background:#e6f4eb;color:#177656;display:grid;place-items:center;flex:none;font-weight:850}.eau-user-meta{display:grid;gap:5px;min-width:0}.eau-user-meta strong{font-size:12px;color:#244b36;white-space:normal;overflow-wrap:anywhere}.eau-user-sub{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10px;color:#86978b}.eau-self-label{color:#128364;font-weight:800}.eau-role{display:inline-flex;align-items:center;white-space:nowrap;padding:7px 10px;background:#f0f4f1;border-radius:999px;color:#4d6957;font-size:11px;font-weight:750}.eau-role--admin{background:#e8f4ec;color:#167153}
++.eau-state{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-size:11px;font-weight:750}.eau-state-dot{background:currentColor;width:7px;height:7px;border-radius:50%}.eau-state--active{color:#17875d}.eau-state--locked{color:#bc4d4d}.eau-verified{color:#18875a;font-weight:750;white-space:nowrap}.eau-unverified{color:#89958b;white-space:nowrap}.eau-row-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:260px}.eau-action{cursor:pointer;border:1px solid #dce9df;background:#fff;color:#25664d;border-radius:8px;padding:8px 10px;font-size:11px!important;font-weight:750!important;white-space:nowrap}.eau-action:hover:not(:disabled){background:#eef8f1;border-color:#add2b9}.eau-action-detail{background:#eaf7ef;border-color:#d5ecdd}.eau-action-danger{color:#a94444;border-color:#f0d6d2}.eau-action-danger:hover:not(:disabled){background:#fff2f2}.eau-action:disabled{opacity:.42;cursor:not-allowed}
++.eau-pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;font-size:12px;color:#788b7c}.eau-pagination strong{color:#1a684b}.eau-pagination>div{display:flex;gap:8px}.eau-pagination button{font-size:12px!important;border:1px solid #d8e8dd;background:#fff;padding:10px 14px;border-radius:9px;color:#166d4f;font-weight:750!important;cursor:pointer}.eau-pagination button:hover:not(:disabled){background:#ecf7ef}.eau-pagination button:disabled{opacity:.45;cursor:not-allowed}.eau-filter-warning{font-size:11px;color:#936e37;background:#fff9ec;padding:10px 13px;border-radius:9px;margin:14px 0 0;line-height:1.7}
++.eau-security-note{display:flex;align-items:flex-start;gap:12px;border:1px solid #dce9e0;border-radius:13px;padding:17px 19px;margin-top:16px;background:#f8fcf9}.eau-security-note>span{font-size:23px;color:#25865f}.eau-security-note strong{font-size:12px;color:#24543b}.eau-security-note p{font-size:11px;color:#748679;line-height:1.75;margin:5px 0 0}
++.eau-modal-root{position:fixed;inset:0;display:grid;place-items:center;z-index:5000;padding:16px}.eau-modal-backdrop{position:absolute;inset:0;border:0;background:rgba(10,32,23,.55);cursor:pointer}.eau-modal{position:relative;z-index:1;background:#fff;border-radius:19px;padding:clamp(18px,3vw,27px);max-width:520px;width:100%;max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 25px 80px #09261945}.eau-modal-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.eau-modal-top button{border:0;background:#f2f6f3;border-radius:9px;width:34px;height:34px;cursor:pointer;font-size:19px;color:#486753}.eau-modal-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:#e8f6ed;color:#16835c;font-size:23px}.eau-modal h2{font-size:21px;color:#224935;line-height:1.35;margin:0 0 8px}.eau-modal>p{color:#7a8a7e;font-size:12px;line-height:1.75;margin:0 0 18px}.eau-modal-facts{margin:0;display:grid;gap:0;border:1px solid #e3ece5;border-radius:12px;overflow:hidden}.eau-modal-facts>div{display:grid;grid-template-columns:155px minmax(0,1fr);gap:12px;padding:12px 14px;border-bottom:1px solid #e6efe8;font-size:12px}.eau-modal-facts>div:last-child{border-bottom:0}.eau-modal-facts dt{color:#829084}.eau-modal-facts dd{margin:0;color:#264932;font-weight:750;min-width:0;overflow-wrap:anywhere}.eau-modal-facts .eau-modal-highlight{background:#f0f9f3}.eau-break-id{user-select:all}.eau-modal-warning{padding:11px 13px;border-radius:10px;background:#fff7e8;color:#95672e!important;margin:14px 0 0!important}.eau-modal-error{background:#fff2f2;color:#ac3636!important;padding:11px;border-radius:9px}.eau-modal-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:20px}
++@media(max-width:1050px){.eau-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.eau-hero{align-items:flex-start}.eau-hero-actions{width:100%}}
++@media(max-width:620px){.eau-hero{padding:24px 20px;border-radius:17px}.eau-hero h1{font-size:27px}.eau-hero-actions .eau-btn{flex:1}.eau-stats{gap:9px}.eau-stat{padding:13px;gap:9px}.eau-stat-icon{width:35px;height:35px;font-size:18px}.eau-stat strong{font-size:21px}.eau-directory{padding:15px;border-radius:17px}.eau-directory-heading h2{font-size:20px}.eau-search-form .eau-search-field{flex-basis:100%}.eau-filter-fields{width:100%}.eau-filter-fields label{flex:1;min-width:145px}.eau-filter-fields select{min-width:0;width:100%}.eau-pagination>div{width:100%}.eau-pagination button{flex:1}.eau-modal-facts>div{grid-template-columns:1fr;gap:4px}}
++@media(prefers-reduced-motion:reduce){.eau-spinner{animation:none}.eau-page .eau-btn{transition:none}}
++
++.eau-modal-copy-notice{font-size:11px;color:#1b7753!important;background:#edf9f0;border-radius:9px;padding:9px 12px;margin:12px 0 0!important}

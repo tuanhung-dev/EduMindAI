@@ -123,6 +123,13 @@ builder.Services.AddSingleton<DocumentRetrievalService>(sp => new DocumentRetrie
 builder.Services.AddScoped<DocumentIndexingService>();
 builder.Services.AddHostedService<DocumentIndexWorker>();
 
+// ADMIN-06: in-memory, privacy-preserving AI HTTP outcome counters.
+builder.Services.AddSingleton<AdminAiRequestMetrics>();
+builder.Services.AddHttpClient("AdminOllamaHealth", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 builder.Services.AddHttpClient<AiTextService>(client =>
 {
     // Ollama tren laptop co the can vai phut khi load model lan dau.
@@ -153,34 +160,6 @@ app.Use(async (ctx, next) =>
 });
 app.UseRouting();
 app.UseCors("ReactApp");
-// When MySQL chat tables/columns are missing, return a safe actionable error
-// instead of an opaque HTTP 500. Full details remain only in Backend logs.
-app.Use(async (ctx, next) =>
-{
-    try
-    {
-        await next();
-    }
-    catch (Exception ex) when (
-        ctx.Request.Path.StartsWithSegments("/api/ai") &&
-        (ex is System.Data.Common.DbException || ex is DbUpdateException))
-    {
-        var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>()
-            .CreateLogger("EduMind.ChatDatabase");
-        logger.LogError(ex, "Database failure for {Path}; trace {TraceId}",
-            ctx.Request.Path, ctx.TraceIdentifier);
-        if (ctx.Response.HasStarted) throw; // SSE headers cannot be replaced.
-        ctx.Response.Clear();
-        ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await ctx.Response.WriteAsJsonAsync(new
-        {
-            code = "AI_DATABASE_ERROR",
-            message = "Không truy cập được dữ liệu hội thoại. Hãy kiểm tra kết nối MySQL và chạy dotnet ef database update sau khi sao lưu database.",
-            traceId = ctx.TraceIdentifier
-        });
-    }
-});
-
 app.UseAuthentication();
 
 // Bước 19: áp dụng trạng thái khóa và vai trò HIỆN TẠI từ MySQL trên mọi
@@ -261,6 +240,14 @@ using (var scope = app.Services.CreateScope())
         }
     }
 }
+
+// Track only authorized AI-generation endpoints (no request bodies or account IDs).
+// This sits AFTER authentication/authorization/rate limiting and BEFORE controllers.
+app.Use(async (context, next) =>
+{
+    var metrics = context.RequestServices.GetRequiredService<AdminAiRequestMetrics>();
+    await metrics.CollectAsync(context, next);
+});
 
 app.MapControllers();
 app.Run();

@@ -22,6 +22,9 @@ import PdfViewerPage from "./pages/PdfViewerPage";
 import AdminSubjectsPage from "./pages/AdminSubjectsPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminDocumentsPage from "./pages/AdminDocumentsPage";
+import AdminExamsPage from "./pages/AdminExamsPage";
+import AdminMonitoringPage from "./pages/AdminMonitoringPage";
 import AccountRecoveryPage from "./pages/AccountRecoveryPage";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -98,6 +101,9 @@ function AppRoutes() {
           <Route path="admin" element={<AdminOnly><AdminDashboardPage /></AdminOnly>} />
           <Route path="admin/users" element={<AdminOnly><AdminUsersPage /></AdminOnly>} />
           <Route path="admin/subjects" element={<AdminOnly><AdminSubjectsPage /></AdminOnly>} />
+          <Route path="admin/documents" element={<AdminOnly><AdminDocumentsPage /></AdminOnly>} />
+          <Route path="admin/exams" element={<AdminOnly><AdminExamsPage /></AdminOnly>} />
+          <Route path="admin/monitoring" element={<AdminOnly><AdminMonitoringPage /></AdminOnly>} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

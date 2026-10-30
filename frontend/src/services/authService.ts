@@ -36,7 +36,7 @@ export function saveAccessToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
-// Bước 17 dùng Bearer token có thời hạn từ ASP.NET Core Identity.
+// dùng Bearer token có thời hạn từ ASP.NET Core Identity.
 // Chưa dùng refresh token để giảm nơi lưu bí mật; hết hạn thì đăng nhập lại.
 export async function authenticatedFetch(url: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);

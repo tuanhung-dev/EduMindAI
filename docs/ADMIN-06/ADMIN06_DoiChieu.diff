@@ -1,0 +1,58 @@
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -24,6 +24,7 @@
+ import AdminUsersPage from "./pages/AdminUsersPage";
+ import AdminDocumentsPage from "./pages/AdminDocumentsPage";
+ import AdminExamsPage from "./pages/AdminExamsPage";
++import AdminMonitoringPage from "./pages/AdminMonitoringPage";
+ import AccountRecoveryPage from "./pages/AccountRecoveryPage";
+ import AccountSettingsPage from "./pages/AccountSettingsPage";
+ import { AuthProvider, useAuth } from "./contexts/AuthContext";
+@@ -102,6 +103,7 @@
+           <Route path="admin/subjects" element={<AdminOnly><AdminSubjectsPage /></AdminOnly>} />
+           <Route path="admin/documents" element={<AdminOnly><AdminDocumentsPage /></AdminOnly>} />
+           <Route path="admin/exams" element={<AdminOnly><AdminExamsPage /></AdminOnly>} />
++          <Route path="admin/monitoring" element={<AdminOnly><AdminMonitoringPage /></AdminOnly>} />
+         </Route>
+ 
+         <Route path="*" element={<NotFoundPage />} />
+--- a/frontend/src/layouts/AppLayout.tsx
++++ b/frontend/src/layouts/AppLayout.tsx
+@@ -25,6 +25,7 @@
+   { path: "/app/admin/subjects", icon: "⚙", label: "Quản trị môn học" },
+   { path: "/app/admin/documents", icon: "▤", label: "Quản lý tài liệu" },
+   { path: "/app/admin/exams", icon: "◈", label: "Đề thi & kết quả" },
++  { path: "/app/admin/monitoring", icon: "⌁", label: "Giám sát AI & hệ thống" },
+ ];
+ 
+ function getPageName(pathname: string) {
+--- a/backend/EduMind.Api/Program.cs
++++ b/backend/EduMind.Api/Program.cs
+@@ -122,6 +122,13 @@
+ // D5: persistent status-based queue; uses existing Documents.Status column.
+ builder.Services.AddScoped<DocumentIndexingService>();
+ builder.Services.AddHostedService<DocumentIndexWorker>();
++
++// ADMIN-06: in-memory, privacy-preserving AI HTTP outcome counters.
++builder.Services.AddSingleton<AdminAiRequestMetrics>();
++builder.Services.AddHttpClient("AdminOllamaHealth", client =>
++{
++    client.Timeout = TimeSpan.FromSeconds(5);
++});
+ 
+ builder.Services.AddHttpClient<AiTextService>(client =>
+ {
+@@ -234,5 +241,13 @@
+     }
+ }
+ 
++// Track only authorized AI-generation endpoints (no request bodies or account IDs).
++// This sits AFTER authentication/authorization/rate limiting and BEFORE controllers.
++app.Use(async (context, next) =>
++{
++    var metrics = context.RequestServices.GetRequiredService<AdminAiRequestMetrics>();
++    await metrics.CollectAsync(context, next);
++});
++
+ app.MapControllers();
+ app.Run();

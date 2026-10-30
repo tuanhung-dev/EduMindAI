@@ -23,6 +23,9 @@ const adminItems = [
   { path: "/app/admin", icon: "◫", label: "Dashboard Admin", end: true },
   { path: "/app/admin/users", icon: "◉", label: "Quản lý người dùng" },
   { path: "/app/admin/subjects", icon: "⚙", label: "Quản trị môn học" },
+  { path: "/app/admin/documents", icon: "▤", label: "Quản lý tài liệu" },
+  { path: "/app/admin/exams", icon: "◈", label: "Đề thi & kết quả" },
+  { path: "/app/admin/monitoring", icon: "⌁", label: "Giám sát AI & hệ thống" },
 ];
 
 function getPageName(pathname: string) {
